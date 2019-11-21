@@ -1,19 +1,26 @@
-#include "os_defs.h"
-#include "os_init.h"
-#include "os_heap.h"
-#include "os_cond.h"
-#include "os_mutex.h"
-#include "os_thread.h"
-#include "os_atomics.h"
-#include "os_process.h"
-#include "ut_timed_cb.h"
+// #include "os_defs.h"
+// #include "os_init.h"
+// #include "os_heap.h"
+// #include "os_cond.h"
+// #include "os_mutex.h"
+// #include "os_thread.h"
+// #include "os_atomics.h"
+// #include "os_process.h"
 
+#include <string.h>
 
+#include "dds/ddsrt/atomics.h"
+#include "dds/ddsrt/heap.h"
+#include "dds/ddsrt/sync.h"
+#include "dds/ddsrt/threads.h"
+#include "dds/ddsrt/time.h"
+
+#include "dds/security/core/ut_timed_cb.h"
 
 
 struct ut_timed_dispatcher_t
 {
-    os_boolean active;
+    bool active;
     void *listener;
 };
 
@@ -23,53 +30,56 @@ struct ut__queue_event_t
     struct ut__queue_event_t *prev;
     struct ut_timed_dispatcher_t *dispatcher;
     ut_timed_cb_t callback;
-    os_timeW trigger_time;
+    dds_time_t trigger_time; /*TODO: Should there be a Wall clock time?*/
     void *arg;
 };
 
 
-static os_mutex g_lock;
-static os_cond  g_cond;
+static ddsrt_mutex_t g_lock;
+static ddsrt_cond_t  g_cond;
 static struct ut__queue_event_t *g_first_event = NULL;
-static os_threadId g_thread_id;
-static os_boolean g_terminate = OS_FALSE;
+static ddsrt_thread_t* g_thread_ptr;
+static bool g_terminate = false;
 
 
 static void
-ut__timed_cb_fini(void)
+ut__timed_cb_fini(void* a)
 {
-    if (os_threadIdToInteger(g_thread_id) != os_threadIdToInteger(OS_THREAD_ID_NONE)) {
-        g_terminate = OS_TRUE;
-        os_condSignal(&g_cond);
-        (void)os_threadWaitExit(g_thread_id, NULL);
+    DDSRT_UNUSED_ARG(a);
+
+    if (g_thread_ptr != NULL /*OS_THREAD_ID_NONE*/ ){  // TODO: Check definition of thread none
+        g_terminate = true;
+        ddsrt_cond_signal(&g_cond);
+        ddsrt_thread_join(*g_thread_ptr, NULL);
+        ddsrt_free(g_thread_ptr);
+        g_thread_ptr = NULL;
     }
-    os_condDestroy(&g_cond);
-    os_mutexDestroy(&g_lock);
-    os_osExit();
+    ddsrt_cond_destroy(&g_cond);
+    ddsrt_mutex_destroy(&g_lock);
+    //os_osExit(); // TODO: Check any further clean-up steps
 }
 
 
 static void
 ut__timed_cb_init(void)
 {
-    static pa_uint32_t init_cnt = PA_UINT32_INIT(0);
-    static os_boolean initialized = OS_FALSE;
+    static ddsrt_atomic_uint32_t init_cnt = DDSRT_ATOMIC_UINT32_INIT(0);
+    static bool initialized = false;
 
-    if (pa_inc32_nv(&init_cnt) == 1) {
+    if (ddsrt_atomic_inc32_nv(&init_cnt) == 1) {
         /* Initialization. */
-        os_osInit();
-        g_thread_id = OS_THREAD_ID_NONE;
-        (void)os_mutexInit(&g_lock, NULL);
-        (void)os_condInit (&g_cond, &g_lock, NULL);
-        os_procAtExit(ut__timed_cb_fini);
-        initialized = OS_TRUE;
+        //os_osInit(); /*TODO: Check needed init steps */
+        g_thread_ptr = NULL; /*OS_THREAD_ID_NONE*/; // TODO: Check definition of thread none
+        ddsrt_mutex_init(&g_lock);
+        ddsrt_cond_init(&g_cond);
+        initialized = true;
     } else {
         /* Wait until we have locking. */
-        while (initialized == OS_FALSE) {
-            ospl_os_sleep(10 * OS_DURATION_MILLISECOND);
+        while (initialized == false) {
+            dds_sleepfor(DDS_MSECS(10));
         }
         /* Make sure we never wrap. */
-        pa_dec32(&init_cnt);
+        ddsrt_atomic_dec32(&init_cnt);
     }
 }
 
@@ -89,31 +99,32 @@ ut__remove_event(
     if (next) {
         next->prev = prev;
     }
-    os_free(event);
+    
+    ddsrt_free(event);
     return next;
 }
 
 
-static void*
+static uint32_t
 ut__timed_dispatcher_thread(
         void *a)
 {
     struct ut__queue_event_t *event;
-    os_duration timeout;
+    dds_duration_t timeout;
 
-    OS_UNUSED_ARG(a);
+    DDSRT_UNUSED_ARG(a);
 
-    os_mutexLock(&g_lock);
+    ddsrt_mutex_lock(&g_lock);
 
     event = g_first_event;
     do {
         if (event) {
-            /* Just some sanity checks. */
-            assert(event->callback);
-            assert(event->dispatcher);
+            // /* Just some sanity checks. */
+            // assert(event->callback);
+            // assert(event->dispatcher);
 
             /* Determine the trigger timeout of this callback. */
-            timeout = os_timeWDiff(event->trigger_time, os_timeWGet());
+            timeout = dds_time() - event->trigger_time;
 
             /* Check if this event has to be triggered. */
             if (timeout <= 0) {
@@ -136,12 +147,12 @@ ut__timed_dispatcher_thread(
             }
         } else {
             /* No (more) events. Wait until some are added or until the end. */
-            timeout = OS_DURATION_INFINITE;
+            timeout = DDS_INFINITY;
         }
 
-        if ((timeout > 0) || (timeout == OS_DURATION_INFINITE)) {
+        if ((timeout > 0) || (timeout == DDS_INFINITY)) {
             /* Wait for new event, timeout or the end. */
-            (void)os_condTimedWait(&g_cond, &g_lock, timeout);
+            (void)ddsrt_cond_waitfor(&g_cond, &g_lock, timeout);
 
             /* Restart, because 'old' triggers could have been added. */
             event = g_first_event;
@@ -149,7 +160,7 @@ ut__timed_dispatcher_thread(
 
     } while (!g_terminate);
 
-    os_mutexUnlock(&g_lock);
+    ddsrt_mutex_unlock(&g_lock);
 
     return 0;
 }
@@ -164,7 +175,7 @@ ut_timed_dispatcher_new()
     ut__timed_cb_init();
 
     /* New dispatcher. */
-    d = os_malloc(sizeof(struct ut_timed_dispatcher_t));
+    d = ddsrt_malloc(sizeof(struct ut_timed_dispatcher_t));
     memset(d, 0, sizeof(struct ut_timed_dispatcher_t));
 
     return d;
@@ -176,10 +187,10 @@ ut_timed_dispatcher_free(
 {
     struct ut__queue_event_t *event;
 
-    assert(d);
+    // assert(d);
 
     /* Remove d related events from queue. */
-    os_mutexLock(&g_lock);
+    ddsrt_mutex_lock(&g_lock);
     event = g_first_event;
     while (event != NULL) {
         if (event->dispatcher == d) {
@@ -192,10 +203,10 @@ ut_timed_dispatcher_free(
             event = event->next;
         }
     }
-    os_mutexUnlock(&g_lock);
+    ddsrt_mutex_unlock(&g_lock);
 
     /* Free this dispatcher. */
-    os_free(d);
+    ddsrt_free(d);
 }
 
 
@@ -203,26 +214,28 @@ void
 ut_timed_dispatcher_enable(
         struct ut_timed_dispatcher_t *d, void *listener)
 {
-    assert(d);
-    assert(!(d->active));
+    // assert(d);
+    // assert(!(d->active));
 
-    os_mutexLock(&g_lock);
+    ddsrt_mutex_lock(&g_lock);
 
     /* Remember possible listener and activate. */
     d->listener = listener;
-    d->active = OS_TRUE;
+    d->active = true;
 
     /* Start thread when not running, otherwise wake it up to
      * trigger callbacks that were (possibly) previously added. */
-    if (os_threadIdToInteger(g_thread_id) == os_threadIdToInteger(OS_THREAD_ID_NONE)) {
-        os_threadAttr attr;
-        os_threadAttrInit(&attr);
-        (void)os_threadCreate (&g_thread_id, "security_dispatcher", &attr, ut__timed_dispatcher_thread, NULL);
+    if (g_thread_ptr == NULL /*os_threadIdToInteger(OS_THREAD_ID_NONE)*/) { // TODO: Check definition of thread none
+        g_thread_ptr = ddsrt_malloc(sizeof(*g_thread_ptr));
+        ddsrt_threadattr_t attr;
+        ddsrt_threadattr_init(&attr);
+        ddsrt_thread_create(g_thread_ptr, "security_dispatcher", &attr, ut__timed_dispatcher_thread, NULL); /* TODO: Check return an thread_id input */
+        ddsrt_thread_cleanup_push(ut__timed_cb_fini, NULL); // TODO: Revisit thread/process difference
     } else {
-        os_condSignal (&g_cond);
+        ddsrt_cond_signal(&g_cond);
     }
 
-    os_mutexUnlock(&g_lock);
+    ddsrt_mutex_unlock(&g_lock);
 }
 
 
@@ -230,16 +243,16 @@ void
 ut_timed_dispatcher_disable(
         struct ut_timed_dispatcher_t *d)
 {
-    assert(d);
-    assert(!(d->active));
+    // assert(d);
+    // assert(!(d->active));
 
-    os_mutexLock(&g_lock);
+    ddsrt_mutex_lock(&g_lock);
 
     /* Forget listener and deactivate. */
     d->listener = NULL;
-    d->active = OS_TRUE;
+    d->active = true;
 
-    os_mutexUnlock(&g_lock);
+    ddsrt_mutex_unlock(&g_lock);
 }
 
 
@@ -247,17 +260,17 @@ void
 ut_timed_dispatcher_add(
         struct ut_timed_dispatcher_t *d,
         ut_timed_cb_t cb,
-        os_timeW trigger_time,
+        dds_time_t trigger_time,
         void *arg)
 {
     struct ut__queue_event_t *event_new;
     struct ut__queue_event_t *event_wrk;
 
-    assert(d);
-    assert(cb);
+    // assert(d);
+    // assert(cb);
 
     /* Create event. */
-    event_new = os_malloc(sizeof(struct ut__queue_event_t));
+    event_new = ddsrt_malloc(sizeof(struct ut__queue_event_t));
     memset(event_new, 0, sizeof(struct ut__queue_event_t));
     event_new->trigger_time = trigger_time;
     event_new->dispatcher = d;
@@ -265,12 +278,12 @@ ut_timed_dispatcher_add(
     event_new->arg = arg;
 
     /* Insert event based on trigger_time. */
-    os_mutexLock(&g_lock);
+    ddsrt_mutex_lock(&g_lock);
     if (g_first_event) {
         struct ut__queue_event_t *last;
         for (event_wrk = g_first_event; event_wrk != NULL; event_wrk = event_wrk->next) {
             last = event_wrk;
-            if (os_timeWCompare(event_wrk->trigger_time, event_new->trigger_time) == OS_MORE) {
+            if (event_new->trigger_time - event_wrk->trigger_time > 0) { // TODO: Check for function with time compare
                 /* This is the first event encountered that takes longer to trigger.
                  * Put our new event in front of it. */
                 event_new->prev = event_wrk->prev;
@@ -295,10 +308,10 @@ ut_timed_dispatcher_add(
         /* This new event is the first one. */
         g_first_event = event_new;
     }
-    os_mutexUnlock(&g_lock);
+    ddsrt_mutex_unlock(&g_lock);
 
     /* Wake up thread (if it's running). */
-    os_condSignal(&g_cond);
+    ddsrt_cond_signal(&g_cond);
 }
 
 

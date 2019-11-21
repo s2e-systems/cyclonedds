@@ -1,20 +1,12 @@
 #ifndef UT_TIMED_CALLBACK_H
 #define UT_TIMED_CALLBACK_H
 
-#include "os_time.h"
-#include "os_if.h"
+#include "dds/export.h"
+#include "dds/ddsrt/time.h"
 
 #if defined (__cplusplus)
 extern "C" {
 #endif
-
-#ifdef OSPL_BUILD_CORE
-#define OS_API OS_API_EXPORT
-#else
-#define OS_API OS_API_IMPORT
-#endif
-
-
 
 /**
  * The dispatcher that will trigger the timed callbacks.
@@ -70,10 +62,8 @@ typedef void
  *
  * @return              New (disabled) timed callbacks dispatcher.
  */
-OS_API struct ut_timed_dispatcher_t*
-ut_timed_dispatcher_new();
-
-
+DDS_EXPORT struct ut_timed_dispatcher_t*
+ut_timed_dispatcher_new(void);
 
 /**
  * Frees the given dispatcher.
@@ -85,7 +75,7 @@ ut_timed_dispatcher_new();
  *
  * @return              void
  */
-OS_API void
+DDS_EXPORT void
 ut_timed_dispatcher_free(
         struct ut_timed_dispatcher_t *d);
 
@@ -113,7 +103,7 @@ ut_timed_dispatcher_free(
  *
  * @return              void.
  */
-OS_API void
+DDS_EXPORT void
 ut_timed_dispatcher_enable(
         struct ut_timed_dispatcher_t *d,
         void *listener);
@@ -135,7 +125,7 @@ ut_timed_dispatcher_enable(
  *
  * @return              void.
  */
-OS_API void
+DDS_EXPORT void
 ut_timed_dispatcher_disable(
         struct ut_timed_dispatcher_t *d);
 
@@ -165,15 +155,12 @@ ut_timed_dispatcher_disable(
  *
  * @return              void.
  */
-OS_API void
+DDS_EXPORT void
 ut_timed_dispatcher_add(
         struct ut_timed_dispatcher_t *d,
         ut_timed_cb_t cb,
-        os_timeW trigger_time,
+        dds_time_t trigger_time,
         void *arg);
-
-
-#undef OS_API
 
 #if defined (__cplusplus)
 }
