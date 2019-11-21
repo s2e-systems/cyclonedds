@@ -920,7 +920,7 @@ DDS_Security_KeyMaterial_AES_GCM_GMAC_deinit(
 
 DDS_Security_CryptoTransformKind_Enum
 DDS_Security_basicprotectionkind2transformationkind(
-     const DDS_Security_PropertySeq *properties, 
+     const DDS_Security_PropertySeq *properties,
      DDS_Security_BasicProtectionKind protection)
 {
     int keysize=256;
@@ -1132,3 +1132,228 @@ DDS_Security_normalize_file(
 
 }
 
+dds_time_t
+DDS_Security_parse_xml_date(
+    char *buf)
+{
+  dds_time_t rt = DDS_TIME_INVALID;
+
+  int32_t year = -1;
+  int32_t month = -1;
+  int32_t day = -1;
+  int32_t hour = -1;
+  int32_t minute = -1;
+  int32_t second = -1;
+  int32_t hour_offset = -1;
+  int32_t minute_offset = -1;
+
+  int32_t total_leap_years = 0;
+  int32_t total_reg_years = 0;
+  int32_t total_num_days = 0;
+  int32_t ts_offset = 0;
+  int64_t frac_ns = 0;
+  int64_t frac_ns_pow = 100000000;
+  int64_t sign_indep_offset = 0; /* Used to avoid the sign warning */
+  int64_t ts = 0;
+
+  size_t cnt = 0;
+  size_t cnt_frac_sec = 0;
+  size_t frac_sec_loop_cnt = 0;
+  int32_t month_cnt = 0;
+
+  bool frac_sec = false;
+  assert(buf != NULL);
+
+  /* Make an integrity check of the string before the conversion*/
+  while (buf[cnt] != '\0')
+  {
+    if (cnt == 4 || cnt == 7)
+    {
+      if (buf[cnt] != '-')
+      {
+        cnt = 0;
+        break;
+      }
+    }
+    else if (cnt == 10)
+    {
+      if (buf[cnt] != 'T')
+      {
+        cnt = 0;
+        break;
+      }
+    }
+    else if (cnt == 13 || cnt == 16)
+    {
+      if (buf[cnt] != ':')
+      {
+        cnt = 0;
+        break;
+      }
+    }
+    else if (cnt == 19)
+    {
+      if (buf[cnt] != 'Z' && buf[cnt] != '+' && buf[cnt] != '-' && buf[cnt] != '.')
+      {
+        cnt = 0;
+        break;
+      }
+
+      /* If a dot is found then a variable number of fractional seconds is present.
+               A second integrity loop to account for the variability is used */
+      if (buf[cnt] == '.' && !frac_sec)
+      {
+        frac_sec = true;
+        while (buf[cnt + 1] != '\0' && (buf[cnt + 1] >= '0' && buf[cnt + 1] <= '9'))
+        {
+          cnt_frac_sec++;
+          cnt++;
+        }
+      }
+    }
+    else if (frac_sec && cnt == 20 + cnt_frac_sec)
+    {
+      if (buf[cnt] != 'Z' && buf[cnt] != '+' && buf[cnt] != '-')
+      {
+        cnt = 0;
+        break;
+      }
+    }
+    else if ((!frac_sec && cnt == 22) || (frac_sec && cnt == 23 + cnt_frac_sec))
+    {
+      if (buf[cnt] != ':')
+      {
+        cnt = 0;
+        break;
+      }
+    }
+    else
+    {
+      if (!(buf[cnt] >= '0' && buf[cnt] <= '9'))
+      {
+        cnt = 0;
+        break;
+      }
+    }
+    cnt++;
+  }
+
+  /* Do not allow more than 12 and less than 1 fractional second digits if they are used */
+  if (frac_sec && (cnt_frac_sec < 1 || cnt_frac_sec > 12))
+  {
+    cnt = 0;
+    cnt_frac_sec = 0;
+  }
+
+  /* Valid string length value at this stage are 19, 20 and 25 if no fractional seconds are present.
+     * If fractional seconds are used then the number of digits plus the preceding point are added to
+     * the string length.
+     */
+  if ((!frac_sec && (cnt == 19 || cnt == 20 || cnt == 25)) ||
+      (frac_sec && (cnt == 20 + cnt_frac_sec || cnt == 21 + cnt_frac_sec || cnt == 26 + cnt_frac_sec)))
+  {
+    /* If the string has a valid length convert the string to a year, month, day, hour,
+         * minute, second, hour offset and minute offset representation */
+    year = ddsrt_todigit(buf[0]) * 1000 + ddsrt_todigit(buf[1]) * 100 + ddsrt_todigit(buf[2]) * 10 + ddsrt_todigit(buf[3]);
+    month = ddsrt_todigit(buf[5]) * 10 + ddsrt_todigit(buf[6]);
+    day = ddsrt_todigit(buf[8]) * 10 + ddsrt_todigit(buf[9]);
+
+    hour = ddsrt_todigit(buf[11]) * 10 + ddsrt_todigit(buf[12]);
+    minute = ddsrt_todigit(buf[14]) * 10 + ddsrt_todigit(buf[15]);
+    second = ddsrt_todigit(buf[17]) * 10 + ddsrt_todigit(buf[18]);
+
+    if (frac_sec)
+    {
+      for (frac_sec_loop_cnt = 0; frac_sec_loop_cnt < cnt_frac_sec; frac_sec_loop_cnt++)
+      {
+        /* Maximum granularity is nanosecond so consider maximum 9 digits */
+        if (frac_sec_loop_cnt < 9)
+        {
+          frac_ns += ddsrt_todigit(buf[20 + frac_sec_loop_cnt]) * frac_ns_pow;
+          frac_ns_pow = frac_ns_pow / 10;
+        }
+      }
+      cnt_frac_sec += 1; /* Add 1 to account for the . character from here onwards */
+    }
+
+    /* If the length is 20 the last character must be a Z representing UTC time zone */
+    if (cnt == 19 + cnt_frac_sec || (cnt == 20 + cnt_frac_sec && buf[19 + cnt_frac_sec] == 'Z'))
+    {
+      hour_offset = 0;
+      minute_offset = 0;
+    }
+    else if (cnt == 25 + cnt_frac_sec)
+    {
+      hour_offset = ddsrt_todigit(buf[20 + cnt_frac_sec]) * 10 + ddsrt_todigit(buf[21 + cnt_frac_sec]);
+      minute_offset = ddsrt_todigit(buf[23 + cnt_frac_sec]) * 10 + ddsrt_todigit(buf[24 + cnt_frac_sec]);
+    }
+  }
+
+  /* Make a limit check to make sure that all the numbers are within absolute boundaries */
+  if ((year >= 1970 && year <= 2553) &&
+      (month >= 1 && month <= 12) &&
+      (day >= 1 && day <= 31) &&
+      (hour >= 0 && hour <= 23) &&
+      (minute >= 0 && minute <= 59) &&
+      (second >= 0 && second <= 59) &&
+      (((hour_offset >= 0 && hour_offset <= 11) && (minute_offset >= 0 && minute_offset <= 59)) || (hour_offset == 12 && minute_offset == 0)))
+  {
+    /*  Boundary check including consideration for month and leap years */
+    if (((month == 4 || month == 6 || month == 9 || month == 11) && (day >= 1 && day <= 30)) ||
+        ((month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) && (day >= 1 && day <= 31)) ||
+        (month == 2 && ((year % 100 != 0 && year % 4 == 0) || (year % 100 == 0 && year % 400 == 0)) && (day >= 1 && day <= 29)) ||
+        (month == 2 && (day >= 1 && day <= 28)))
+    {
+      /* Convert the year-month-day to total number of days */
+      total_leap_years = (year - 1970 + 1) / 4;
+      total_reg_years = (year - 1970 - total_leap_years);
+      total_num_days = (total_leap_years * 366 + total_reg_years * 365);
+
+      for (month_cnt = 1; month_cnt < month; month_cnt++)
+      {
+        if (month_cnt == 4 || month_cnt == 6 || month_cnt == 9 || month_cnt == 11)
+          total_num_days += 30;
+        else if (month_cnt == 2)
+        {
+          if ((year % 100 == 0 && year % 400 == 0) || (year % 100 != 0 && year % 4 == 0))
+            total_num_days += 29;
+          else
+            total_num_days += 28;
+        }
+        else
+          total_num_days += 31;
+      }
+
+      total_num_days += day - 1;
+
+      /* Correct the offset sign if negative */
+      if (buf[19 + cnt_frac_sec] == '-')
+      {
+        hour_offset = -hour_offset;
+        minute_offset = -minute_offset;
+      }
+      /* Convert the total number of days to seconds */
+      ts = (int64_t)total_num_days * 24 * 60 * 60;
+
+      /* Add the hour, minute and second */
+      ts = ts + (hour * 60 * 60 + minute * 60 + second);
+
+      /* Apply the hour and minute offset including the day correction if needed */
+      ts_offset = hour_offset * 60 * 60 + minute_offset * 60;
+
+      /* Prevent the offset from making the timestamp negative otherwise do not initialize the object */
+      if (ts_offset <= 0)
+      {
+        sign_indep_offset = -ts_offset;
+        rt = (ts + sign_indep_offset) * DDS_NSECS_IN_SEC + frac_ns;
+      }
+      else if ((ts_offset > 0) && (ts_offset < (int32_t)(ts)))
+      {
+        sign_indep_offset = ts_offset;
+        rt = (ts - sign_indep_offset) * DDS_NSECS_IN_SEC + frac_ns;
+      }
+    }
+  }
+
+  return rt;
+}
