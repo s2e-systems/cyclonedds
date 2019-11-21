@@ -45,6 +45,10 @@ target_include_directories(security_core
 )
 #target_link_libraries(security_core PRIVATE ddsrt security_api)
 
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()
+
 install(
   DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/include/dds/security/core/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/dds/security/core/"
