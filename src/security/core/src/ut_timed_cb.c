@@ -30,7 +30,7 @@ struct ut__queue_event_t
     struct ut__queue_event_t *prev;
     struct ut_timed_dispatcher_t *dispatcher;
     ut_timed_cb_t callback;
-    dds_time_t trigger_time; /*TODO: Should there be a Wall clock time?*/
+    dds_time_t trigger_time;
     void *arg;
 };
 
@@ -124,7 +124,7 @@ ut__timed_dispatcher_thread(
             // assert(event->dispatcher);
 
             /* Determine the trigger timeout of this callback. */
-            timeout = dds_time() - event->trigger_time;
+            timeout = event->trigger_time - dds_time();
 
             /* Check if this event has to be triggered. */
             if (timeout <= 0) {
@@ -283,7 +283,7 @@ ut_timed_dispatcher_add(
         struct ut__queue_event_t *last;
         for (event_wrk = g_first_event; event_wrk != NULL; event_wrk = event_wrk->next) {
             last = event_wrk;
-            if (event_new->trigger_time - event_wrk->trigger_time > 0) { // TODO: Check for function with time compare
+            if (event_wrk->trigger_time - event_new->trigger_time > 0) {
                 /* This is the first event encountered that takes longer to trigger.
                  * Put our new event in front of it. */
                 event_new->prev = event_wrk->prev;

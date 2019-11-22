@@ -13,8 +13,23 @@ typedef struct {
     dds_time_t time;
 } tc__sequence_data;
 
-int g_sequence_idx = 0;
-tc__sequence_data g_sequence_array[SEQ_SIZE];
+static int g_sequence_idx = 0;
+static tc__sequence_data g_sequence_array[SEQ_SIZE];
+
+static void simple_callback(struct ut_timed_dispatcher_t *d,
+        ut_timed_cb_kind kind,
+        void *listener,
+        void *arg)
+{
+    if (*((bool *)arg) == false)
+    {
+        *((bool *)arg) = true;
+    }
+    else
+    {
+        *((bool *)arg) = false;
+    }
+}
 
 static void
 tc__callback(
@@ -33,6 +48,63 @@ tc__callback(
     g_sequence_idx++;
 }
 
+CU_Test(ut_timed_cb, simple_test)
+{
+    struct ut_timed_dispatcher_t *d1 = NULL;
+    static bool test_var = false;
+
+    dds_time_t now     = dds_time();
+    dds_time_t future  = now + DDS_SECS(2);
+
+    d1 = ut_timed_dispatcher_new();
+
+    CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
+
+    ut_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
+
+    ut_timed_dispatcher_enable(d1, (void*)NULL);
+
+    CU_ASSERT_FALSE_FATAL(test_var);
+
+    dds_sleepfor(DDS_MSECS(500));
+
+    CU_ASSERT_FALSE_FATAL(test_var);
+
+    dds_sleepfor(DDS_SECS(2));
+
+    CU_ASSERT_TRUE_FATAL(test_var);
+}
+
+CU_Test(ut_timed_cb, simple_test_with_future)
+{
+    struct ut_timed_dispatcher_t *d1 = NULL;
+    static bool test_var = false;
+
+    dds_time_t now     = dds_time();
+    dds_time_t future  = now + DDS_SECS(2);
+    dds_time_t far_future  = now + DDS_SECS(10);
+
+    d1 = ut_timed_dispatcher_new();
+
+    CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
+
+    ut_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
+    ut_timed_dispatcher_add(d1, simple_callback, far_future, (void*)&test_var);
+
+    ut_timed_dispatcher_enable(d1, (void*)NULL);
+
+    CU_ASSERT_FALSE_FATAL(test_var);
+
+    dds_sleepfor(DDS_MSECS(500));
+
+    CU_ASSERT_FALSE_FATAL(test_var);
+
+    dds_sleepfor(DDS_SECS(2));
+
+    CU_ASSERT_TRUE_FATAL(test_var);
+}
+
+
 // static void
 // tc__sequence_data_print(
 //         tc__sequence_data *seq)
@@ -50,6 +122,7 @@ tc__callback(
 
 CU_Test(ut_timed_cb, test_create_dispatcher)
 {
+
     struct ut_timed_dispatcher_t *d1 = NULL;
     struct ut_timed_dispatcher_t *d2 = NULL;
     struct ut_timed_dispatcher_t *d3 = NULL;
@@ -180,7 +253,8 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
             ok = false;
         }
         if (seq != idx) {
-            CU_FAIL(sprintf("Unexpected sequence ordering %d vs %d", seq, idx));
+            printf("Unexpected sequence ordering %d vs %d\n", seq, idx);
+            CU_FAIL("Unexpected sequence ordering");
             ok = false;
         }
         if (seq > 8) {
@@ -323,5 +397,4 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
             CU_PASS("Received deletion callbacks.");
         }
     }
-
 }
