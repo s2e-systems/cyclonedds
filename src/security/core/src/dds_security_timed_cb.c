@@ -1,10 +1,14 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include "dds/ddsrt/atomics.h"
 #include "dds/ddsrt/heap.h"
 #include "dds/ddsrt/sync.h"
 #include "dds/ddsrt/threads.h"
 #include "dds/ddsrt/time.h"
+
 
 #include "dds/security/core/dds_security_timed_cb.h"
 
@@ -39,7 +43,7 @@ timed_cb_fini(void)
     /* Make sure we never wrap. */
     if (ddsrt_atomic_dec32_nv(&g_init_cnt) < 1)
     {
-        if (g_thread_ptr != NULL /*OS_THREAD_ID_NONE*/ ){  // TODO: Check definition of thread none
+        if (g_thread_ptr != NULL) {
             g_terminate = true;
             ddsrt_cond_signal(&g_cond);
             ddsrt_thread_join(*g_thread_ptr, NULL);
@@ -49,7 +53,6 @@ timed_cb_fini(void)
         ddsrt_cond_destroy(&g_cond);
         ddsrt_mutex_destroy(&g_lock);
     }
-    //os_osExit(); // TODO: Check any further clean-up steps
 }
 
 
@@ -60,8 +63,7 @@ timed_cb_init(void)
 
     if (ddsrt_atomic_inc32_nv(&g_init_cnt) == 1) {
         /* Initialization. */
-        //os_osInit(); /*TODO: Check needed init steps */
-        g_thread_ptr = NULL; /*OS_THREAD_ID_NONE*/; // TODO: Check definition of thread none
+        g_thread_ptr = NULL;
         g_terminate = false;
         ddsrt_mutex_init(&g_lock);
         ddsrt_cond_init(&g_cond);
@@ -109,9 +111,9 @@ static uint32_t timed_dispatcher_thread(
     event = g_first_event;
     do {
         if (event) {
-            // /* Just some sanity checks. */
-            // assert(event->callback);
-            // assert(event->dispatcher);
+            /* Just some sanity checks. */
+            assert(event->callback);
+            assert(event->dispatcher);
 
             /* Determine the trigger timeout of this callback. */
             timeout = event->trigger_time - dds_time();
@@ -177,7 +179,7 @@ dds_security_timed_dispatcher_free(
 {
     struct queue_event_t *event;
 
-    // assert(d);
+    assert(d);
 
     /* Remove d related events from queue. */
     ddsrt_mutex_lock(&g_lock);
@@ -206,8 +208,10 @@ void
 dds_security_timed_dispatcher_enable(
         struct dds_security_timed_dispatcher_t *d, void *listener)
 {
-    // assert(d);
-    // assert(!(d->active));
+    assert(d);
+    assert(!(d->active));
+
+    dds_return_t osres;
 
     ddsrt_mutex_lock(&g_lock);
 
@@ -217,11 +221,16 @@ dds_security_timed_dispatcher_enable(
 
     /* Start thread when not running, otherwise wake it up to
      * trigger callbacks that were (possibly) previously added. */
-    if (g_thread_ptr == NULL /*os_threadIdToInteger(OS_THREAD_ID_NONE)*/) { // TODO: Check definition of thread none
+    if (g_thread_ptr == NULL ) {
         g_thread_ptr = ddsrt_malloc(sizeof(*g_thread_ptr));
         ddsrt_threadattr_t attr;
         ddsrt_threadattr_init(&attr);
-        ddsrt_thread_create(g_thread_ptr, "security_dispatcher", &attr, timed_dispatcher_thread, NULL); /* TODO: Check return an thread_id input */
+        osres = ddsrt_thread_create(g_thread_ptr, "security_dispatcher", &attr, timed_dispatcher_thread, NULL);
+        if (osres == DDS_RETCODE_ERROR)
+        {
+            fprintf(stderr, "Error: cannot create thread security_dispatcher");
+            exit(2);
+        }
     } else {
         ddsrt_cond_signal(&g_cond);
     }
@@ -234,8 +243,8 @@ void
 dds_security_timed_dispatcher_disable(
         struct dds_security_timed_dispatcher_t *d)
 {
-    // assert(d);
-    // assert(!(d->active));
+    assert(d);
+    assert(!(d->active));
 
     ddsrt_mutex_lock(&g_lock);
 
@@ -257,8 +266,8 @@ dds_security_timed_dispatcher_add(
     struct queue_event_t *event_new;
     struct queue_event_t *event_wrk;
 
-    // assert(d);
-    // assert(cb);
+    assert(d);
+    assert(cb);
 
     /* Create event. */
     event_new = ddsrt_malloc(sizeof(struct queue_event_t));
