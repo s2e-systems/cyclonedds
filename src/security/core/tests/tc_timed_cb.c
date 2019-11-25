@@ -2,6 +2,7 @@
 #include "CUnit/Test.h"
 
 #include "dds/security/core/ut_timed_cb.h"
+#include "dds/ddsrt/misc.h"
 
 #define SEQ_SIZE (16)
 
@@ -21,7 +22,10 @@ static void simple_callback(struct dds_security_timed_dispatcher_t *d,
         void *listener,
         void *arg)
 {
-    
+    DDSRT_UNUSED_ARG(d);
+    DDSRT_UNUSED_ARG(kind);
+    DDSRT_UNUSED_ARG(listener);
+
     if (*((bool *)arg) == false)
     {
         *((bool *)arg) = true;
