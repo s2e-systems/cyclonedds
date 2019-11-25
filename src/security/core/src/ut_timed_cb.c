@@ -1,12 +1,3 @@
-// #include "os_defs.h"
-// #include "os_init.h"
-// #include "os_heap.h"
-// #include "os_cond.h"
-// #include "os_mutex.h"
-// #include "os_thread.h"
-// #include "os_atomics.h"
-// #include "os_process.h"
-
 #include <string.h>
 
 #include "dds/ddsrt/atomics.h"
@@ -18,18 +9,18 @@
 #include "dds/security/core/ut_timed_cb.h"
 
 
-struct ut_timed_dispatcher_t
+struct dds_security_timed_dispatcher_t
 {
     bool active;
     void *listener;
 };
 
-struct ut__queue_event_t
+struct queue_event_t
 {
-    struct ut__queue_event_t *next;
-    struct ut__queue_event_t *prev;
-    struct ut_timed_dispatcher_t *dispatcher;
-    ut_timed_cb_t callback;
+    struct queue_event_t *next;
+    struct queue_event_t *prev;
+    struct dds_security_timed_dispatcher_t *dispatcher;
+    dds_security_timed_cb_t callback;
     dds_time_t trigger_time;
     void *arg;
 };
@@ -37,13 +28,13 @@ struct ut__queue_event_t
 
 static ddsrt_mutex_t g_lock;
 static ddsrt_cond_t  g_cond;
-static struct ut__queue_event_t *g_first_event = NULL;
+static struct queue_event_t *g_first_event = NULL;
 static ddsrt_thread_t* g_thread_ptr;
 static bool g_terminate = false;
 static ddsrt_atomic_uint32_t g_init_cnt = DDSRT_ATOMIC_UINT32_INIT(0);
 
 void
-ut__timed_cb_fini(void)
+timed_cb_fini(void)
 {
     /* Make sure we never wrap. */
     if (ddsrt_atomic_dec32_nv(&g_init_cnt) < 1)
@@ -63,7 +54,7 @@ ut__timed_cb_fini(void)
 
 
 static void
-ut__timed_cb_init(void)
+timed_cb_init(void)
 {
     static bool initialized = false;
 
@@ -85,12 +76,12 @@ ut__timed_cb_init(void)
 
 
 /* Return next event. */
-static struct ut__queue_event_t*
-ut__remove_event(
-        struct ut__queue_event_t *event)
+static struct queue_event_t*
+remove_event(
+        struct queue_event_t *event)
 {
-    struct ut__queue_event_t *next = event->next;
-    struct ut__queue_event_t *prev = event->prev;
+    struct queue_event_t *next = event->next;
+    struct queue_event_t *prev = event->prev;
     if (prev == NULL) {
         g_first_event = next;
     } else {
@@ -105,11 +96,10 @@ ut__remove_event(
 }
 
 
-static uint32_t
-ut__timed_dispatcher_thread(
+static uint32_t timed_dispatcher_thread(
         void *a)
 {
-    struct ut__queue_event_t *event;
+    struct queue_event_t *event;
     dds_duration_t timeout;
 
     DDSRT_UNUSED_ARG(a);
@@ -131,12 +121,12 @@ ut__timed_dispatcher_thread(
                 /* Trigger callback when related dispatcher is active. */
                 if (event->dispatcher->active) {
                     event->callback(event->dispatcher,
-                                    UT_TIMED_CB_KIND_TIMEOUT,
+                                    DDS_SECURITY_TIMED_CB_KIND_TIMEOUT,
                                     event->dispatcher->listener,
                                     event->arg);
 
                     /* Remove handled event from queue, continue with next. */
-                    event = ut__remove_event(event);
+                    event = remove_event(event);
                 } else {
                     /* Check next event. */
                     event = event->next;
@@ -166,26 +156,26 @@ ut__timed_dispatcher_thread(
 }
 
 
-struct ut_timed_dispatcher_t*
-ut_timed_dispatcher_new()
+struct dds_security_timed_dispatcher_t*
+dds_security_timed_dispatcher_new()
 {
-    struct ut_timed_dispatcher_t *d;
+    struct dds_security_timed_dispatcher_t *d;
 
     /* Initialization. */
-    ut__timed_cb_init();
+    timed_cb_init();
 
     /* New dispatcher. */
-    d = ddsrt_malloc(sizeof(struct ut_timed_dispatcher_t));
-    memset(d, 0, sizeof(struct ut_timed_dispatcher_t));
+    d = ddsrt_malloc(sizeof(struct dds_security_timed_dispatcher_t));
+    memset(d, 0, sizeof(struct dds_security_timed_dispatcher_t));
 
     return d;
 }
 
 void
-ut_timed_dispatcher_free(
-        struct ut_timed_dispatcher_t *d)
+dds_security_timed_dispatcher_free(
+        struct dds_security_timed_dispatcher_t *d)
 {
-    struct ut__queue_event_t *event;
+    struct queue_event_t *event;
 
     // assert(d);
 
@@ -195,17 +185,17 @@ ut_timed_dispatcher_free(
     while (event != NULL) {
         if (event->dispatcher == d) {
             event->callback(event->dispatcher,
-                            UT_TIMED_CB_KIND_DELETE,
+                            DDS_SECURITY_TIMED_CB_KIND_DELETE,
                             NULL,
                             event->arg);
-            event = ut__remove_event(event);
+            event = remove_event(event);
         } else {
             event = event->next;
         }
     }
     ddsrt_mutex_unlock(&g_lock);
 
-    ut__timed_cb_fini();
+    timed_cb_fini();
 
     /* Free this dispatcher. */
     ddsrt_free(d);
@@ -213,8 +203,8 @@ ut_timed_dispatcher_free(
 
 
 void
-ut_timed_dispatcher_enable(
-        struct ut_timed_dispatcher_t *d, void *listener)
+dds_security_timed_dispatcher_enable(
+        struct dds_security_timed_dispatcher_t *d, void *listener)
 {
     // assert(d);
     // assert(!(d->active));
@@ -231,7 +221,7 @@ ut_timed_dispatcher_enable(
         g_thread_ptr = ddsrt_malloc(sizeof(*g_thread_ptr));
         ddsrt_threadattr_t attr;
         ddsrt_threadattr_init(&attr);
-        ddsrt_thread_create(g_thread_ptr, "security_dispatcher", &attr, ut__timed_dispatcher_thread, NULL); /* TODO: Check return an thread_id input */
+        ddsrt_thread_create(g_thread_ptr, "security_dispatcher", &attr, timed_dispatcher_thread, NULL); /* TODO: Check return an thread_id input */
     } else {
         ddsrt_cond_signal(&g_cond);
     }
@@ -241,8 +231,8 @@ ut_timed_dispatcher_enable(
 
 
 void
-ut_timed_dispatcher_disable(
-        struct ut_timed_dispatcher_t *d)
+dds_security_timed_dispatcher_disable(
+        struct dds_security_timed_dispatcher_t *d)
 {
     // assert(d);
     // assert(!(d->active));
@@ -258,21 +248,21 @@ ut_timed_dispatcher_disable(
 
 
 void
-ut_timed_dispatcher_add(
-        struct ut_timed_dispatcher_t *d,
-        ut_timed_cb_t cb,
+dds_security_timed_dispatcher_add(
+        struct dds_security_timed_dispatcher_t *d,
+        dds_security_timed_cb_t cb,
         dds_time_t trigger_time,
         void *arg)
 {
-    struct ut__queue_event_t *event_new;
-    struct ut__queue_event_t *event_wrk;
+    struct queue_event_t *event_new;
+    struct queue_event_t *event_wrk;
 
     // assert(d);
     // assert(cb);
 
     /* Create event. */
-    event_new = ddsrt_malloc(sizeof(struct ut__queue_event_t));
-    memset(event_new, 0, sizeof(struct ut__queue_event_t));
+    event_new = ddsrt_malloc(sizeof(struct queue_event_t));
+    memset(event_new, 0, sizeof(struct queue_event_t));
     event_new->trigger_time = trigger_time;
     event_new->dispatcher = d;
     event_new->callback = cb;
@@ -281,7 +271,7 @@ ut_timed_dispatcher_add(
     /* Insert event based on trigger_time. */
     ddsrt_mutex_lock(&g_lock);
     if (g_first_event) {
-        struct ut__queue_event_t *last;
+        struct queue_event_t *last;
         for (event_wrk = g_first_event; event_wrk != NULL; event_wrk = event_wrk->next) {
             last = event_wrk;
             if (event_wrk->trigger_time - event_new->trigger_time > 0) {

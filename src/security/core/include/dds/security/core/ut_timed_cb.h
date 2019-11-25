@@ -1,5 +1,5 @@
-#ifndef UT_TIMED_CALLBACK_H
-#define UT_TIMED_CALLBACK_H
+#ifndef DDS_SECURITY_TIMED_CALLBACK_H
+#define DDS_SECURITY_TIMED_CALLBACK_H
 
 #include "dds/export.h"
 #include "dds/ddsrt/time.h"
@@ -11,7 +11,7 @@ extern "C" {
 /**
  * The dispatcher that will trigger the timed callbacks.
  */
-struct ut_timed_dispatcher_t;
+struct dds_security_timed_dispatcher_t;
 
 
 
@@ -21,9 +21,9 @@ struct ut_timed_dispatcher_t;
  * 2. The related dispatcher is being deleted.
  */
 typedef enum {
-    UT_TIMED_CB_KIND_TIMEOUT,
-    UT_TIMED_CB_KIND_DELETE
-} ut_timed_cb_kind;
+    DDS_SECURITY_TIMED_CB_KIND_TIMEOUT,
+    DDS_SECURITY_TIMED_CB_KIND_DELETE
+} dds_security_timed_cb_kind;
 
 
 
@@ -46,9 +46,9 @@ typedef enum {
  * @return              void
  */
 typedef void
-(*ut_timed_cb_t) (
-        struct ut_timed_dispatcher_t *d,
-        ut_timed_cb_kind kind,
+(*dds_security_timed_cb_t) (
+        struct dds_security_timed_dispatcher_t *d,
+        dds_security_timed_cb_kind kind,
         void *listener,
         void *arg);
 
@@ -56,19 +56,19 @@ typedef void
 
 /**
  * Create a new dispatcher for timed callbacks.
- * The dispatcher is not enabled (see ut_timed_dispatcher_enable).
+ * The dispatcher is not enabled (see dds_security_timed_dispatcher_enable).
  *
  * @param               void
  *
  * @return              New (disabled) timed callbacks dispatcher.
  */
-DDS_EXPORT struct ut_timed_dispatcher_t*
-ut_timed_dispatcher_new(void);
+DDS_EXPORT struct dds_security_timed_dispatcher_t*
+dds_security_timed_dispatcher_new(void);
 
 /**
  * Frees the given dispatcher.
  * If the dispatcher contains timed callbacks, then these will be
- * triggered with UT_TIMED_CB_KIND_DELETE and then removed. This
+ * triggered with DDS_SECURITY_TIMED_CB_KIND_DELETE and then removed. This
  * is done whether the dispatcher is enabled or not.
  *
  * @param d             The dispatcher to free.
@@ -76,15 +76,15 @@ ut_timed_dispatcher_new(void);
  * @return              void
  */
 DDS_EXPORT void
-ut_timed_dispatcher_free(
-        struct ut_timed_dispatcher_t *d);
+dds_security_timed_dispatcher_free(
+        struct dds_security_timed_dispatcher_t *d);
 
 
 
 /**
  * Enables a dispatcher for timed callbacks.
  *
- * Until a dispatcher is enabled, no UT_TIMED_CB_KIND_TIMEOUT callbacks will
+ * Until a dispatcher is enabled, no DDS_SECURITY_TIMED_CB_KIND_TIMEOUT callbacks will
  * be triggered.
  * As soon as it is enabled, possible stored timed callbacks that are in the
  * past will be triggered at that moment.
@@ -95,7 +95,7 @@ ut_timed_dispatcher_free(
  * is triggered. The dispatcher doesn't do anything more with it, so it may
  * be NULL.
  *
- * UT_TIMED_CB_KIND_DELETE callbacks will always be triggered despite the
+ * DDS_SECURITY_TIMED_CB_KIND_DELETE callbacks will always be triggered despite the
  * dispatcher being possibly disabled.
  *
  * @param d             The dispatcher to enable.
@@ -104,8 +104,8 @@ ut_timed_dispatcher_free(
  * @return              void.
  */
 DDS_EXPORT void
-ut_timed_dispatcher_enable(
-        struct ut_timed_dispatcher_t *d,
+dds_security_timed_dispatcher_enable(
+        struct dds_security_timed_dispatcher_t *d,
         void *listener);
 
 
@@ -118,7 +118,7 @@ ut_timed_dispatcher_enable(
  * that they can be triggered after a (re)enabling.
  *
  * This is when the callback is actually triggered by a timeout and thus
- * its kind is UT_TIMED_CB_KIND_TIMEOUT. UT_TIMED_CB_KIND_DELETE callbacks
+ * its kind is DDS_SECURITY_TIMED_CB_KIND_TIMEOUT. DDS_SECURITY_TIMED_CB_KIND_DELETE callbacks
  * will always be triggered despite the dispatcher being possibly disabled.
  *
  * @param d             The dispatcher to disable.
@@ -126,15 +126,15 @@ ut_timed_dispatcher_enable(
  * @return              void.
  */
 DDS_EXPORT void
-ut_timed_dispatcher_disable(
-        struct ut_timed_dispatcher_t *d);
+dds_security_timed_dispatcher_disable(
+        struct dds_security_timed_dispatcher_t *d);
 
 
 
 /**
  * Adds a timed callback to a dispatcher.
  *
- * The given callback will be triggered with UT_TIMED_CB_KIND_TIMEOUT when:
+ * The given callback will be triggered with DDS_SECURITY_TIMED_CB_KIND_TIMEOUT when:
  *  1. The dispatcher is enabled and
  *  2. The trigger_time has been reached.
  *
@@ -143,7 +143,7 @@ ut_timed_dispatcher_disable(
  * callback immediately. Otherwise, the 'past' callback will be triggered
  * at the moment that the dispatcher is enabled.
  *
- * The given callback will be triggered with UT_TIMED_CB_KIND_DELETE when:
+ * The given callback will be triggered with DDS_SECURITY_TIMED_CB_KIND_DELETE when:
  *  1. The related dispatcher is deleted (ignoring enable/disable).
  *
  * This is done so that possible related callback resources can be freed.
@@ -156,9 +156,9 @@ ut_timed_dispatcher_disable(
  * @return              void.
  */
 DDS_EXPORT void
-ut_timed_dispatcher_add(
-        struct ut_timed_dispatcher_t *d,
-        ut_timed_cb_t cb,
+dds_security_timed_dispatcher_add(
+        struct dds_security_timed_dispatcher_t *d,
+        dds_security_timed_cb_t cb,
         dds_time_t trigger_time,
         void *arg);
 
@@ -166,4 +166,4 @@ ut_timed_dispatcher_add(
 }
 #endif
 
-#endif /* UT_TIMED_CALLBACK_H */
+#endif /* DDS_SECURITY_TIMED_CALLBACK_H */

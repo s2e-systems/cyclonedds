@@ -6,8 +6,8 @@
 #define SEQ_SIZE (16)
 
 typedef struct {
-    struct ut_timed_dispatcher_t *d;
-    ut_timed_cb_kind kind;
+    struct dds_security_timed_dispatcher_t *d;
+    dds_security_timed_cb_kind kind;
     void *listener;
     void *arg;
     dds_time_t time;
@@ -16,11 +16,12 @@ typedef struct {
 static int g_sequence_idx = 0;
 static tc__sequence_data g_sequence_array[SEQ_SIZE];
 
-static void simple_callback(struct ut_timed_dispatcher_t *d,
-        ut_timed_cb_kind kind,
+static void simple_callback(struct dds_security_timed_dispatcher_t *d,
+        dds_security_timed_cb_kind kind,
         void *listener,
         void *arg)
 {
+    
     if (*((bool *)arg) == false)
     {
         *((bool *)arg) = true;
@@ -33,8 +34,8 @@ static void simple_callback(struct ut_timed_dispatcher_t *d,
 
 static void
 tc__callback(
-        struct ut_timed_dispatcher_t *d,
-        ut_timed_cb_kind kind,
+        struct dds_security_timed_dispatcher_t *d,
+        dds_security_timed_cb_kind kind,
         void *listener,
         void *arg)
 {
@@ -48,21 +49,21 @@ tc__callback(
     g_sequence_idx++;
 }
 
-CU_Test(ut_timed_cb, simple_test)
+CU_Test(dds_security_timed_cb, simple_test)
 {
-    struct ut_timed_dispatcher_t *d1 = NULL;
+    struct dds_security_timed_dispatcher_t *d1 = NULL;
     static bool test_var = false;
 
     dds_time_t now     = dds_time();
     dds_time_t future  = now + DDS_SECS(2);
 
-    d1 = ut_timed_dispatcher_new();
+    d1 = dds_security_timed_dispatcher_new();
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
 
-    ut_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
+    dds_security_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
 
-    ut_timed_dispatcher_enable(d1, (void*)NULL);
+    dds_security_timed_dispatcher_enable(d1, (void*)NULL);
 
     CU_ASSERT_FALSE_FATAL(test_var);
 
@@ -74,62 +75,26 @@ CU_Test(ut_timed_cb, simple_test)
 
     CU_ASSERT_TRUE_FATAL(test_var);
 
-    ut_timed_dispatcher_free(d1);
+    dds_security_timed_dispatcher_free(d1);
 }
 
-CU_Test(ut_timed_cb, simple_test_with_future)
+CU_Test(dds_security_timed_cb, simple_test_with_future)
 {
-    struct ut_timed_dispatcher_t *d1 = NULL;
-    static bool test_var = false;
-
-    dds_time_t now     = dds_time();
-    dds_time_t future  = now + DDS_SECS(2);
-    dds_time_t far_future  = now + DDS_SECS(10);
-
-    d1 = ut_timed_dispatcher_new();
-
-    CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
-
-    ut_timed_dispatcher_enable(d1, (void*)NULL);
-
-    ut_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
-    ut_timed_dispatcher_add(d1, simple_callback, far_future, (void*)&test_var);
-
-    CU_ASSERT_FALSE_FATAL(test_var);
-
-    dds_sleepfor(DDS_MSECS(500));
-
-    CU_ASSERT_FALSE_FATAL(test_var);
-
-    dds_sleepfor(DDS_SECS(2));
-
-    CU_ASSERT_TRUE_FATAL(test_var);
-
-    ut_timed_dispatcher_free(d1);
-}
-
-CU_Test(ut_timed_cb, test_multiple_dispatchers)
-{
-    struct ut_timed_dispatcher_t *d1 = NULL;
-    struct ut_timed_dispatcher_t *d2 = NULL;
+    struct dds_security_timed_dispatcher_t *d1 = NULL;
     static bool test_var = false;
 
     dds_time_t now     = dds_time();
     dds_time_t future  = now + DDS_SECS(2);
     dds_time_t far_future  = now + DDS_SECS(10);
 
-    d1 = ut_timed_dispatcher_new();
-    d2 = ut_timed_dispatcher_new();
+    d1 = dds_security_timed_dispatcher_new();
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
 
-    ut_timed_dispatcher_enable(d1, (void*)NULL);
-    ut_timed_dispatcher_enable(d2, (void*)NULL);
+    dds_security_timed_dispatcher_enable(d1, (void*)NULL);
 
-    ut_timed_dispatcher_free(d2);
-
-    ut_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
-    ut_timed_dispatcher_add(d1, simple_callback, far_future, (void*)&test_var);
+    dds_security_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
+    dds_security_timed_dispatcher_add(d1, simple_callback, far_future, (void*)&test_var);
 
     CU_ASSERT_FALSE_FATAL(test_var);
 
@@ -141,34 +106,70 @@ CU_Test(ut_timed_cb, test_multiple_dispatchers)
 
     CU_ASSERT_TRUE_FATAL(test_var);
 
-    ut_timed_dispatcher_free(d1);
+    dds_security_timed_dispatcher_free(d1);
 }
 
-CU_Test(ut_timed_cb, test_not_enabled_multiple_dispatchers)
+CU_Test(dds_security_timed_cb, test_multiple_dispatchers)
 {
-    struct ut_timed_dispatcher_t *d1 = NULL;
-    struct ut_timed_dispatcher_t *d2 = NULL;
+    struct dds_security_timed_dispatcher_t *d1 = NULL;
+    struct dds_security_timed_dispatcher_t *d2 = NULL;
+    static bool test_var = false;
 
-    d1 = ut_timed_dispatcher_new();
-    d2 = ut_timed_dispatcher_new();
+    dds_time_t now     = dds_time();
+    dds_time_t future  = now + DDS_SECS(2);
+    dds_time_t far_future  = now + DDS_SECS(10);
+
+    d1 = dds_security_timed_dispatcher_new();
+    d2 = dds_security_timed_dispatcher_new();
+
+    CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
+
+    dds_security_timed_dispatcher_enable(d1, (void*)NULL);
+    dds_security_timed_dispatcher_enable(d2, (void*)NULL);
+
+    dds_security_timed_dispatcher_free(d2);
+
+    dds_security_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
+    dds_security_timed_dispatcher_add(d1, simple_callback, far_future, (void*)&test_var);
+
+    CU_ASSERT_FALSE_FATAL(test_var);
+
+    dds_sleepfor(DDS_MSECS(500));
+
+    CU_ASSERT_FALSE_FATAL(test_var);
+
+    dds_sleepfor(DDS_SECS(2));
+
+    CU_ASSERT_TRUE_FATAL(test_var);
+
+    dds_security_timed_dispatcher_free(d1);
+}
+
+CU_Test(dds_security_timed_cb, test_not_enabled_multiple_dispatchers)
+{
+    struct dds_security_timed_dispatcher_t *d1 = NULL;
+    struct dds_security_timed_dispatcher_t *d2 = NULL;
+
+    d1 = dds_security_timed_dispatcher_new();
+    d2 = dds_security_timed_dispatcher_new();
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(d2);
 
-    ut_timed_dispatcher_free(d2);
+    dds_security_timed_dispatcher_free(d2);
 
-    ut_timed_dispatcher_free(d1);
+    dds_security_timed_dispatcher_free(d1);
 
     CU_PASS("Timed callbacks enabled and disabled without add");
 }
 
-CU_Test(ut_timed_cb, test_create_dispatcher)
+CU_Test(dds_security_timed_cb, test_create_dispatcher)
 {
-    struct ut_timed_dispatcher_t *d1 = NULL;
-    struct ut_timed_dispatcher_t *d2 = NULL;
-    struct ut_timed_dispatcher_t *d3 = NULL;
-    struct ut_timed_dispatcher_t *d4 = NULL;
-    struct ut_timed_dispatcher_t *d5 = NULL;
+    struct dds_security_timed_dispatcher_t *d1 = NULL;
+    struct dds_security_timed_dispatcher_t *d2 = NULL;
+    struct dds_security_timed_dispatcher_t *d3 = NULL;
+    struct dds_security_timed_dispatcher_t *d4 = NULL;
+    struct dds_security_timed_dispatcher_t *d5 = NULL;
     bool ok = false;
 
     dds_time_t now     = dds_time();
@@ -180,8 +181,8 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
     /*************************************************************************
      * Check if dispatchers can be created
      *************************************************************************/
-    d1 = ut_timed_dispatcher_new();
-    d2 = ut_timed_dispatcher_new();
+    d1 = dds_security_timed_dispatcher_new();
+    d2 = dds_security_timed_dispatcher_new();
     CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(d2);
 
@@ -192,19 +193,19 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
     /* The last argument is a sequence number in which
      * the callbacks are expected to be called. */
     /* We can only really check if it crashes or not... */
-    ut_timed_dispatcher_add(d1, tc__callback, present, (void*)1);
-    ut_timed_dispatcher_add(d2, tc__callback, past,    (void*)0);
-    ut_timed_dispatcher_add(d2, tc__callback, present, (void*)2);
-    ut_timed_dispatcher_add(d1, tc__callback, future,  (void*)6);
+    dds_security_timed_dispatcher_add(d1, tc__callback, present, (void*)1);
+    dds_security_timed_dispatcher_add(d2, tc__callback, past,    (void*)0);
+    dds_security_timed_dispatcher_add(d2, tc__callback, present, (void*)2);
+    dds_security_timed_dispatcher_add(d1, tc__callback, future,  (void*)6);
         
     CU_PASS("Added callbacks")
 
     /*************************************************************************
      * Check if dispatchers can be created
      *************************************************************************/
-    d3 = ut_timed_dispatcher_new();
-    d4 = ut_timed_dispatcher_new();
-    d5 = ut_timed_dispatcher_new();
+    d3 = dds_security_timed_dispatcher_new();
+    d4 = dds_security_timed_dispatcher_new();
+    d5 = dds_security_timed_dispatcher_new();
     
     CU_ASSERT_PTR_NOT_NULL_FATAL(d3);
     CU_ASSERT_PTR_NOT_NULL_FATAL(d4);
@@ -219,12 +220,12 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
         * 'present' and 'past' callbacks right. */
     /* We can only really check if it crashes or not... */
     dds_sleepfor(DDS_MSECS(600));
-    ut_timed_dispatcher_enable(d1, (void*)NULL);
-    ut_timed_dispatcher_enable(d2, (void*)  d2);
-    ut_timed_dispatcher_enable(d3, (void*)NULL);
+    dds_security_timed_dispatcher_enable(d1, (void*)NULL);
+    dds_security_timed_dispatcher_enable(d2, (void*)  d2);
+    dds_security_timed_dispatcher_enable(d3, (void*)NULL);
     /* Specifically not enabling d4 and d5. */
     dds_sleepfor(DDS_MSECS(600));
-    CU_PASS("Enabled ut_timed_dispatchers.");
+    CU_PASS("Enabled dds_security_timed_dispatchers.");
 
     /*************************************************************************
      * Check if adding callbacks succeeds
@@ -233,15 +234,15 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
     /* The last argument is a sequence number in which
         * the callbacks are expected to be called. */
     /* We can only really check if it crashes or not... */
-    ut_timed_dispatcher_add(d4, tc__callback, past,    (void*)99);
-    ut_timed_dispatcher_add(d2, tc__callback, future,  (void*) 7);
-    ut_timed_dispatcher_add(d3, tc__callback, future2, (void*) 9);
-    ut_timed_dispatcher_add(d1, tc__callback, past,    (void*) 3);
-    ut_timed_dispatcher_add(d1, tc__callback, future2, (void*)10);
-    ut_timed_dispatcher_add(d1, tc__callback, present, (void*) 4);
-    ut_timed_dispatcher_add(d2, tc__callback, present, (void*) 5);
-    ut_timed_dispatcher_add(d1, tc__callback, future,  (void*) 8);
-    ut_timed_dispatcher_add(d3, tc__callback, future2, (void*)11);
+    dds_security_timed_dispatcher_add(d4, tc__callback, past,    (void*)99);
+    dds_security_timed_dispatcher_add(d2, tc__callback, future,  (void*) 7);
+    dds_security_timed_dispatcher_add(d3, tc__callback, future2, (void*) 9);
+    dds_security_timed_dispatcher_add(d1, tc__callback, past,    (void*) 3);
+    dds_security_timed_dispatcher_add(d1, tc__callback, future2, (void*)10);
+    dds_security_timed_dispatcher_add(d1, tc__callback, present, (void*) 4);
+    dds_security_timed_dispatcher_add(d2, tc__callback, present, (void*) 5);
+    dds_security_timed_dispatcher_add(d1, tc__callback, future,  (void*) 8);
+    dds_security_timed_dispatcher_add(d3, tc__callback, future2, (void*)11);
     CU_PASS("Added callbacks.");
 
 
@@ -262,7 +263,7 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
     /* Print and check sequence of triggered callbacks. */
     for (idx = 0; (idx < g_sequence_idx) && (idx < SEQ_SIZE); idx++) {
         int seq = (int)(long long)(g_sequence_array[idx].arg);
-        struct ut_timed_dispatcher_t *expected_d;
+        struct dds_security_timed_dispatcher_t *expected_d;
         void *expected_l;
 
         /*
@@ -319,8 +320,8 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
         /*
          * Callback kind check.
          */
-        if (g_sequence_array[idx].kind != UT_TIMED_CB_KIND_TIMEOUT) {
-            CU_FAIL(sprintf("Unexpected kind %d vs %d", (int)g_sequence_array[idx].kind, (int)UT_TIMED_CB_KIND_TIMEOUT));
+        if (g_sequence_array[idx].kind != DDS_SECURITY_TIMED_CB_KIND_TIMEOUT) {
+            CU_FAIL(sprintf("Unexpected kind %d vs %d", (int)g_sequence_array[idx].kind, (int)DDS_SECURITY_TIMED_CB_KIND_TIMEOUT));
             ok = false;
         }
     }
@@ -342,19 +343,19 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
      *************************************************************************/
     /* We can only really check if it crashes or not... */
     if (d1) {
-        ut_timed_dispatcher_free(d1);
+        dds_security_timed_dispatcher_free(d1);
     }
     if (d2) {
-        ut_timed_dispatcher_free(d2);
+        dds_security_timed_dispatcher_free(d2);
     }
     if (d3) {
-        ut_timed_dispatcher_free(d3);
+        dds_security_timed_dispatcher_free(d3);
     }
     if (d4) {
-        ut_timed_dispatcher_free(d4);
+        dds_security_timed_dispatcher_free(d4);
     }
     if (d5) {
-        ut_timed_dispatcher_free(d5);
+        dds_security_timed_dispatcher_free(d5);
     }
     CU_PASS("Deleted dispatchers.");
 
@@ -376,7 +377,7 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
         /* Print and check sequence of triggered callbacks. */
         for (idx = 0; (idx < g_sequence_idx) && (idx < SEQ_SIZE); idx++) {
             int seq = (int)(long long)(g_sequence_array[idx].arg);
-            struct ut_timed_dispatcher_t *expected_d;
+            struct dds_security_timed_dispatcher_t *expected_d;
 
             /*
              * Human (somewhat) readable format.
@@ -419,8 +420,8 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
             /*
              * Callback kind check.
              */
-            if (g_sequence_array[idx].kind != UT_TIMED_CB_KIND_DELETE) {
-                CU_FAIL(sprintf("Unexpected kind %d vs %d", (int)g_sequence_array[idx].kind, (int)UT_TIMED_CB_KIND_TIMEOUT));
+            if (g_sequence_array[idx].kind != DDS_SECURITY_TIMED_CB_KIND_DELETE) {
+                CU_FAIL(sprintf("Unexpected kind %d vs %d", (int)g_sequence_array[idx].kind, (int)DDS_SECURITY_TIMED_CB_KIND_TIMEOUT));
                 ok = false;
             }
         }
