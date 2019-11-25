@@ -244,13 +244,13 @@ dds_security_timed_dispatcher_disable(
         struct dds_security_timed_dispatcher_t *d)
 {
     assert(d);
-    assert(!(d->active));
+    assert(d->active);
 
     ddsrt_mutex_lock(&g_lock);
 
     /* Forget listener and deactivate. */
     d->listener = NULL;
-    d->active = true;
+    d->active = false;
 
     ddsrt_mutex_unlock(&g_lock);
 }

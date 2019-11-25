@@ -82,6 +82,37 @@ CU_Test(dds_security_timed_cb, simple_test)
     dds_security_timed_dispatcher_free(d1);
 }
 
+CU_Test(dds_security_timed_cb, test_enabled_and_disabled)
+{
+    struct dds_security_timed_dispatcher_t *d1 = NULL;
+    static bool test_var = false;
+
+    dds_time_t now     = dds_time();
+    dds_time_t future  = now + DDS_SECS(2);
+
+    d1 = dds_security_timed_dispatcher_new();
+
+    CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
+
+    dds_security_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
+
+    dds_security_timed_dispatcher_enable(d1, (void*)NULL);
+
+    CU_ASSERT_FALSE(test_var);
+
+    dds_security_timed_dispatcher_disable(d1);
+
+    dds_sleepfor(DDS_MSECS(500));
+
+    CU_ASSERT_FALSE(test_var);
+
+    dds_sleepfor(DDS_SECS(2));
+
+    CU_ASSERT_FALSE(test_var);
+
+    dds_security_timed_dispatcher_free(d1);
+}
+
 CU_Test(dds_security_timed_cb, simple_test_with_future)
 {
     struct dds_security_timed_dispatcher_t *d1 = NULL;
