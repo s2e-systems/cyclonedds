@@ -33,7 +33,7 @@ static ddsrt_thread_t* g_thread_ptr;
 static bool g_terminate = false;
 static ddsrt_atomic_uint32_t g_init_cnt = DDSRT_ATOMIC_UINT32_INIT(0);
 
-void
+static void 
 timed_cb_fini(void)
 {
     /* Make sure we never wrap. */
