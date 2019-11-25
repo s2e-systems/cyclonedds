@@ -13,7 +13,7 @@ PREPEND(srcs_security_core "${CMAKE_CURRENT_LIST_DIR}/src"
     dds_security_serialize.c
     dds_security_utils.c
     shared_secret.c
-    ut_timed_cb.c
+    dds_security_timed_cb.c
 )
  
 PREPEND(hdrs_public_security_core "${CMAKE_CURRENT_LIST_DIR}/include/security/core"
@@ -22,7 +22,7 @@ PREPEND(hdrs_public_security_core "${CMAKE_CURRENT_LIST_DIR}/include/security/co
     dds_security_types.h
     dds_security_utils.h
     shared_secret.h
-    ut_timed_cb.h
+    dds_security_timed_cb.h
 )
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC" )

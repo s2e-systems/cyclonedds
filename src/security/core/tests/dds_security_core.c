@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "CUnit/Test.h"
 
-#include "dds/security/core/ut_timed_cb.h"
+#include "dds/security/core/dds_security_timed_cb.h"
 #include "dds/ddsrt/misc.h"
 
 #define SEQ_SIZE (16)

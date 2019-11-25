@@ -6,7 +6,7 @@
 #include "dds/ddsrt/threads.h"
 #include "dds/ddsrt/time.h"
 
-#include "dds/security/core/ut_timed_cb.h"
+#include "dds/security/core/dds_security_timed_cb.h"
 
 
 struct dds_security_timed_dispatcher_t
