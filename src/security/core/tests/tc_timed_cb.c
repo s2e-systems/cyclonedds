@@ -73,6 +73,8 @@ CU_Test(ut_timed_cb, simple_test)
     dds_sleepfor(DDS_SECS(2));
 
     CU_ASSERT_TRUE_FATAL(test_var);
+
+    ut_timed_dispatcher_free(d1);
 }
 
 CU_Test(ut_timed_cb, simple_test_with_future)
@@ -88,10 +90,10 @@ CU_Test(ut_timed_cb, simple_test_with_future)
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
 
+    ut_timed_dispatcher_enable(d1, (void*)NULL);
+
     ut_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
     ut_timed_dispatcher_add(d1, simple_callback, far_future, (void*)&test_var);
-
-    ut_timed_dispatcher_enable(d1, (void*)NULL);
 
     CU_ASSERT_FALSE_FATAL(test_var);
 
@@ -102,27 +104,66 @@ CU_Test(ut_timed_cb, simple_test_with_future)
     dds_sleepfor(DDS_SECS(2));
 
     CU_ASSERT_TRUE_FATAL(test_var);
+
+    ut_timed_dispatcher_free(d1);
 }
 
+CU_Test(ut_timed_cb, test_multiple_dispatchers)
+{
+    struct ut_timed_dispatcher_t *d1 = NULL;
+    struct ut_timed_dispatcher_t *d2 = NULL;
+    static bool test_var = false;
 
-// static void
-// tc__sequence_data_print(
-//         tc__sequence_data *seq)
-// {
-//     char timebuf[100];
+    dds_time_t now     = dds_time();
+    dds_time_t future  = now + DDS_SECS(2);
+    dds_time_t far_future  = now + DDS_SECS(10);
 
-//     os_timeWImage(seq->time, timebuf, 100);
-//     test_message(FW_NOTE, "[%s] cb(dispatcher{%p}, kind{%s}, listener{%p}, arg{%p})",
-//                            timebuf,
-//                            seq->d,
-//                            (seq->kind == UT_TIMED_CB_KIND_TIMEOUT) ? "timeout" : "delete",
-//                            seq->listener,
-//                            seq->arg);
-// }
+    d1 = ut_timed_dispatcher_new();
+    d2 = ut_timed_dispatcher_new();
+
+    CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
+
+    ut_timed_dispatcher_enable(d1, (void*)NULL);
+    ut_timed_dispatcher_enable(d2, (void*)NULL);
+
+    ut_timed_dispatcher_free(d2);
+
+    ut_timed_dispatcher_add(d1, simple_callback, future, (void*)&test_var);
+    ut_timed_dispatcher_add(d1, simple_callback, far_future, (void*)&test_var);
+
+    CU_ASSERT_FALSE_FATAL(test_var);
+
+    dds_sleepfor(DDS_MSECS(500));
+
+    CU_ASSERT_FALSE_FATAL(test_var);
+
+    dds_sleepfor(DDS_SECS(2));
+
+    CU_ASSERT_TRUE_FATAL(test_var);
+
+    ut_timed_dispatcher_free(d1);
+}
+
+CU_Test(ut_timed_cb, test_not_enabled_multiple_dispatchers)
+{
+    struct ut_timed_dispatcher_t *d1 = NULL;
+    struct ut_timed_dispatcher_t *d2 = NULL;
+
+    d1 = ut_timed_dispatcher_new();
+    d2 = ut_timed_dispatcher_new();
+
+    CU_ASSERT_PTR_NOT_NULL_FATAL(d1);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(d2);
+
+    ut_timed_dispatcher_free(d2);
+
+    ut_timed_dispatcher_free(d1);
+
+    CU_PASS("Timed callbacks enabled and disabled without add");
+}
 
 CU_Test(ut_timed_cb, test_create_dispatcher)
 {
-
     struct ut_timed_dispatcher_t *d1 = NULL;
     struct ut_timed_dispatcher_t *d2 = NULL;
     struct ut_timed_dispatcher_t *d3 = NULL;
@@ -225,11 +266,6 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
         void *expected_l;
 
         /*
-            * Human (somewhat) readable format.
-            */
-        // tc__sequence_data_print(&(g_sequence_array[idx]));
-
-        /*
             * Sequence checks.
             */
         if ((seq == 1) || (seq == 6) || (seq == 3) || (seq == 10) || (seq == 4) || (seq == 8)) {
@@ -267,8 +303,8 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
         }
 
         /*
-            * Callback contents checks.
-            */
+         * Callback contents checks.
+         */
         if (expected_d != NULL) {
             if (g_sequence_array[idx].d != expected_d) {
                 CU_FAIL(sprintf("Unexpected dispatcher %p vs %p", g_sequence_array[idx].d, expected_d));
@@ -281,8 +317,8 @@ CU_Test(ut_timed_cb, test_create_dispatcher)
         }
 
         /*
-            * Callback kind check.
-            */
+         * Callback kind check.
+         */
         if (g_sequence_array[idx].kind != UT_TIMED_CB_KIND_TIMEOUT) {
             CU_FAIL(sprintf("Unexpected kind %d vs %d", (int)g_sequence_array[idx].kind, (int)UT_TIMED_CB_KIND_TIMEOUT));
             ok = false;

@@ -40,23 +40,24 @@ static ddsrt_cond_t  g_cond;
 static struct ut__queue_event_t *g_first_event = NULL;
 static ddsrt_thread_t* g_thread_ptr;
 static bool g_terminate = false;
-static ddsrt_atomic_uint32_t init_cnt = DDSRT_ATOMIC_UINT32_INIT(0);
+static ddsrt_atomic_uint32_t g_init_cnt = DDSRT_ATOMIC_UINT32_INIT(0);
 
-static void
-ut__timed_cb_fini(void* a)
+void
+ut__timed_cb_fini(void)
 {
-    DDSRT_UNUSED_ARG(a);
-
-    if (g_thread_ptr != NULL /*OS_THREAD_ID_NONE*/ ){  // TODO: Check definition of thread none
-        g_terminate = true;
-        ddsrt_cond_signal(&g_cond);
-        ddsrt_thread_join(*g_thread_ptr, NULL);
-        ddsrt_free(g_thread_ptr);
-        g_thread_ptr = NULL;
+    /* Make sure we never wrap. */
+    if (ddsrt_atomic_dec32_nv(&g_init_cnt) < 1)
+    {
+        if (g_thread_ptr != NULL /*OS_THREAD_ID_NONE*/ ){  // TODO: Check definition of thread none
+            g_terminate = true;
+            ddsrt_cond_signal(&g_cond);
+            ddsrt_thread_join(*g_thread_ptr, NULL);
+            ddsrt_free(g_thread_ptr);
+            g_thread_ptr = NULL;
+        }
+        ddsrt_cond_destroy(&g_cond);
+        ddsrt_mutex_destroy(&g_lock);
     }
-    ddsrt_atomic_dec32(&init_cnt);
-    ddsrt_cond_destroy(&g_cond);
-    ddsrt_mutex_destroy(&g_lock);
     //os_osExit(); // TODO: Check any further clean-up steps
 }
 
@@ -66,10 +67,11 @@ ut__timed_cb_init(void)
 {
     static bool initialized = false;
 
-    if (ddsrt_atomic_inc32_nv(&init_cnt) == 1) {
+    if (ddsrt_atomic_inc32_nv(&g_init_cnt) == 1) {
         /* Initialization. */
         //os_osInit(); /*TODO: Check needed init steps */
         g_thread_ptr = NULL; /*OS_THREAD_ID_NONE*/; // TODO: Check definition of thread none
+        g_terminate = false;
         ddsrt_mutex_init(&g_lock);
         ddsrt_cond_init(&g_cond);
         initialized = true;
@@ -78,8 +80,6 @@ ut__timed_cb_init(void)
         while (initialized == false) {
             dds_sleepfor(DDS_MSECS(10));
         }
-        /* Make sure we never wrap. */
-        ddsrt_atomic_dec32(&init_cnt);
     }
 }
 
@@ -205,6 +205,8 @@ ut_timed_dispatcher_free(
     }
     ddsrt_mutex_unlock(&g_lock);
 
+    ut__timed_cb_fini();
+
     /* Free this dispatcher. */
     ddsrt_free(d);
 }
@@ -230,7 +232,6 @@ ut_timed_dispatcher_enable(
         ddsrt_threadattr_t attr;
         ddsrt_threadattr_init(&attr);
         ddsrt_thread_create(g_thread_ptr, "security_dispatcher", &attr, ut__timed_dispatcher_thread, NULL); /* TODO: Check return an thread_id input */
-        ddsrt_thread_cleanup_push(&ut__timed_cb_fini, NULL); // TODO: Revisit thread/process difference
     } else {
         ddsrt_cond_signal(&g_cond);
     }
