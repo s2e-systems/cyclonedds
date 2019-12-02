@@ -9,7 +9,7 @@
 #include "CUnit/CUnit.h"
 #include "CUnit/Test.h"
 #include "assert.h"
-
+#include "dds/ddsrt/time.h"
 
 /* Test helper includes. */
 #include "common/src/loader.h"
@@ -20,6 +20,15 @@
 #include <dds/ddsrt/heap.h>
 #include <dds/ddsrt/string.h>
 #include <config_env.h>
+
+#include <openssl/bn.h>
+#include <openssl/asn1.h>
+#include <openssl/x509.h>
+#include <openssl/x509_vfy.h>
+#include <openssl/pem.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
 
 static const char * PROPERTY_IDENTITY_CA                = "dds.sec.auth.identity_ca";
 static const char * PROPERTY_PRIVATE_KEY                = "dds.sec.auth.private_key";
@@ -551,6 +560,157 @@ static void fill_participant_qos(DDS_Security_Qos *participant_qos,
         participant_qos->property.value._buffer[size-1].value = ddsrt_strdup(trusted_ca_dir_path);
     }
 
+
+}
+
+static dds_security_authentication_listener auth_listener;
+
+static DDS_Security_boolean
+on_revoke_identity_cb( dds_security_authentication_listener *instance,
+                 const dds_security_authentication *plugin,
+                 const DDS_Security_IdentityHandle handle)
+{
+//    OS_UNUSED_ARG( instance );
+//    OS_UNUSED_ARG( plugin );
+//    if (identity_handle_for_callback1 == DDS_SECURITY_HANDLE_NIL) {
+//        identity_handle_for_callback1 = handle;
+//    } else if (identity_handle_for_callback2 == DDS_SECURITY_HANDLE_NIL) {
+//        identity_handle_for_callback2 = handle;
+//    }
+//    printf( "Listener called for handle: %lld  Local:%lld Remote:%lld\n", (long long) handle, local_identity_handle, remote_identity_handle2);
+    printf("XXXXXXXXXXXX Did call it \n");
+    return true;
+}
+
+
+CU_Test(ddssec_builtin_validate_local_identity,nice_happy_day)
+{
+
+
+    DDS_Security_ValidationResult_t result;
+    DDS_Security_IdentityHandle local_identity_handle = DDS_SECURITY_HANDLE_NIL;
+    DDS_Security_GUID_t adjusted_participant_guid;
+    DDS_Security_DomainId domain_id = 0;
+    DDS_Security_Qos participant_qos;
+    DDS_Security_GUID_t candidate_participant_guid;
+    DDS_Security_SecurityException exception = {NULL, 0, 0};
+    DDS_Security_GuidPrefix_t prefix = {0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb};
+    DDS_Security_EntityId_t entityId = {{0xa0,0xa1,0xa2},0x1};
+    DDS_Security_boolean success;
+
+    /* Check if we actually have the validate_local_identity() function. */
+    CU_ASSERT_FATAL (auth != NULL);
+    CU_ASSERT_FATAL (auth->validate_local_identity != NULL);
+
+    auth_listener.on_revoke_identity = &on_revoke_identity_cb;
+    auth->set_listener( auth, &auth_listener, &exception);
+
+
+    memset(&adjusted_participant_guid, 0, sizeof(adjusted_participant_guid));
+    memcpy(&candidate_participant_guid.prefix, &prefix, sizeof(prefix));
+    memcpy(&candidate_participant_guid.entityId, &entityId, sizeof(entityId));
+
+    BIO* cerBio = BIO_new_mem_buf(identity_certificate + 6, -1);
+
+    X509* myx509 = PEM_read_bio_X509(cerBio, NULL, NULL, NULL);
+    ASN1_TIME* asn1_new = ASN1_TIME_new();
+    ASN1_TIME_set(asn1_new, dds_time() / DDS_NSECS_IN_SEC + 3);
+     X509_set1_notAfter(myx509, asn1_new);
+
+    const EVP_MD* digest = EVP_sha256();
+    BIO* privKeyBio = BIO_new_mem_buf(private_key_pem, -1);
+    EVP_PKEY* ca_privkey = PEM_read_bio_PrivateKey(privKeyBio, NULL, NULL, NULL);
+    X509_sign(myx509, ca_privkey, digest);
+
+    char* identity_certificate_new = ddsrt_strdup(identity_certificate);
+    BIO* cerBio_new = BIO_new(BIO_s_mem());
+    BIO_puts(cerBio_new, "data:,");
+    PEM_write_bio_X509(cerBio_new, myx509);
+
+    BIO_read(cerBio_new, identity_certificate_new, strlen(identity_certificate_new));
+
+    fill_participant_qos(&participant_qos, false, identity_certificate_new,
+                                           false, identity_ca,
+                                           false, private_key_pem,
+                                           NULL,
+                                           NULL);
+
+    /* Now call the function. */
+    result = auth->validate_local_identity(
+                            auth,
+                            &local_identity_handle,
+                            &adjusted_participant_guid,
+                            domain_id,
+                            &participant_qos,
+                            &candidate_participant_guid,
+                            &exception);
+
+    if (result != DDS_SECURITY_VALIDATION_OK) {
+        printf("validate_local_identity_failed: %s\n", exception.message ? exception.message : "Error message missing");
+    }
+
+    /* We expected the validation to have succeeded. */
+    CU_ASSERT_FATAL (result == DDS_SECURITY_VALIDATION_OK);
+    CU_ASSERT (local_identity_handle != DDS_SECURITY_HANDLE_NIL);
+
+    print_guid("adjusted_participant_guid", &adjusted_participant_guid);
+    CU_ASSERT (memcmp(&adjusted_participant_guid.entityId, &entityId, sizeof(entityId)) == 0);
+
+    dds_security_property_deinit(&participant_qos.property.value);
+    reset_exception(&exception);
+
+    success = auth->return_identity_handle(auth, local_identity_handle, &exception);
+    CU_ASSERT_TRUE (success);
+
+    if (!success) {
+        printf("return_identity_handle failed: %s\n", exception.message ? exception.message : "Error message missing");
+    }
+    reset_exception(&exception);
+
+    sleep(10);
+
+    /* validate with file */
+    memset(&adjusted_participant_guid, 0, sizeof(adjusted_participant_guid));
+    memcpy(&candidate_participant_guid.prefix, &prefix, sizeof(prefix));
+    memcpy(&candidate_participant_guid.entityId, &entityId, sizeof(entityId));
+
+    fill_participant_qos(&participant_qos, true, identity_certificate_filename,
+                    true, identity_ca_filename,
+                    true, private_key_filename,
+                    NULL,
+                                           NULL);
+
+    /* Now call the function. */
+    result = auth->validate_local_identity(
+                            auth,
+                            &local_identity_handle,
+                            &adjusted_participant_guid,
+                            domain_id,
+                            &participant_qos,
+                            &candidate_participant_guid,
+                            &exception);
+
+    if (result != DDS_SECURITY_VALIDATION_OK) {
+        printf("validate_local_identity_failed: %s\n", exception.message ? exception.message : "Error message missing");
+    }
+
+    /* We expected the validation to have succeeded. */
+    CU_ASSERT_FATAL (result == DDS_SECURITY_VALIDATION_OK);
+    CU_ASSERT (local_identity_handle != DDS_SECURITY_HANDLE_NIL);
+
+    print_guid("adjusted_participant_guid", &adjusted_participant_guid);
+    CU_ASSERT (memcmp(&adjusted_participant_guid.entityId, &entityId, sizeof(entityId)) == 0);
+
+    dds_security_property_deinit(&participant_qos.property.value);
+    reset_exception(&exception);
+
+    success = auth->return_identity_handle(auth, local_identity_handle, &exception);
+    CU_ASSERT_TRUE (success);
+
+    if (!success) {
+        printf("return_identity_handle failed: %s\n", exception.message ? exception.message : "Error message missing");
+    }
+    reset_exception(&exception);
 
 }
 

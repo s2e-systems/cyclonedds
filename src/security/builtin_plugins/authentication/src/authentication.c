@@ -22,6 +22,7 @@
 #include "authentication.h"
 #include "dds/ddsrt/heap.h"
 #include "dds/security/dds_security_api.h"
+#include "dds/security/core/dds_security_timed_cb.h"
 
 
 #if OPENSLL_VERSION_NUMBER >= 0x10002000L
@@ -203,7 +204,7 @@ typedef struct dds_security_authentication_impl {
     ddsrt_mutex_t lock;
     struct ddsrt_hh *objectHash;
     struct ddsrt_hh *remoteGuidHash;
-    struct ut_timed_dispatcher_t *timed_callbacks;
+    struct dds_security_timed_dispatcher_t *timed_callbacks;
     X509Seq trustedCAList;
 
 
@@ -847,11 +848,11 @@ hash_value_to_binary_property(
 
 
 /* Will be enabled after timed callback feature implementation */
-#if TIMED_CALLBACK_IMPLEMENTED
+//#if TIMED_CALLBACK_IMPLEMENTED
 
 static void
-validity_callback(struct ut_timed_dispatcher_t *d,
-                  ut_timed_cb_kind kind,
+validity_callback(struct dds_security_timed_dispatcher_t *d,
+                  dds_security_timed_cb_kind kind,
                   void *listener,
                   void *arg)
 {
@@ -860,7 +861,7 @@ validity_callback(struct ut_timed_dispatcher_t *d,
     assert(d);
     assert(arg);
 
-    if (kind == UT_TIMED_CB_KIND_TIMEOUT) {
+    if (kind == DDS_SECURITY_TIMED_CB_KIND_TIMEOUT) {
         assert(listener);
         dds_security_authentication_listener *auth_listener = (dds_security_authentication_listener*)listener;
         if (auth_listener->on_revoke_identity) {
@@ -873,7 +874,7 @@ validity_callback(struct ut_timed_dispatcher_t *d,
     ddsrt_free(arg);
 }
 
-#endif
+//#endif
 
 static void
 add_validity_end_trigger(dds_security_authentication_impl *auth,
@@ -884,15 +885,15 @@ add_validity_end_trigger(dds_security_authentication_impl *auth,
     DDSRT_UNUSED_ARG( identity_handle );
     DDSRT_UNUSED_ARG( end );
     /* Will be enabled after timed call back feature implementation */
-    /*
+
     validity_cb_info *arg = ddsrt_malloc(sizeof(validity_cb_info));
     arg->auth = auth;
     arg->hdl = identity_handle;
-    ut_timed_dispatcher_add(auth->timed_callbacks,
+    dds_security_timed_dispatcher_add(auth->timed_callbacks,
                             validity_callback,
                             end,
                             (void*)arg);
-                            */
+
 }
 
 
@@ -3178,13 +3179,13 @@ DDS_Security_boolean set_listener(dds_security_authentication *instance,
     DDSRT_UNUSED_ARG(ex);
 
     /* Will be enabled after timed call back feature implementation */
-#if TIMED_CALLBACK_IMPLEMENTED
+//#if TIMED_CALLBACK_IMPLEMENTED
     if (listener) {
-        ut_timed_dispatcher_enable(auth->timed_callbacks, (void*)listener);
+        dds_security_timed_dispatcher_enable(auth->timed_callbacks, (void*)listener);
     } else {
-        ut_timed_dispatcher_disable(auth->timed_callbacks);
+        dds_security_timed_dispatcher_disable(auth->timed_callbacks);
     }
-#endif
+//#endif
     return true;
 }
 
@@ -3400,8 +3401,7 @@ int32_t init_authentication( const char *argument, void **context)
     memset(authentication, 0, sizeof(dds_security_authentication_impl));
 
     /* assign dispatcher to be notified when a validity date ends */
-    /* Disable it until timed callback is ready */
-    /*authentication->timed_callbacks = ut_timed_dispatcher_new(); */
+    authentication->timed_callbacks = dds_security_timed_dispatcher_new();
 
     /* assign the interface functions */
     authentication->base.validate_local_identity = &validate_local_identity;
