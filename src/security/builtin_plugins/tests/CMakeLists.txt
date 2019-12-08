@@ -18,6 +18,7 @@ set(security_auth_test_sources
     "validate_remote_identity/src/validate_remote_identity_utests.c"
     "validate_begin_handshake_request/src/validate_begin_handshake_request_utests.c"
     "process_handshake/src/process_handshake_utests.c"
+    "listeners_authentication/src/listeners_authentication_utests.c"
     "common/src/handshake_helper.c"
     "common/src/loader.c")
 
