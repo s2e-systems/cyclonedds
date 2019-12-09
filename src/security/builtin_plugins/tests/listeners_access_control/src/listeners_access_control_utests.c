@@ -255,7 +255,7 @@ static void get_future_xsdate(char *str, size_t len, int32_t delta)
 
   /* Get future time. */
   rawtime = time(NULL) + delta;
-  gmtime_r(&rawtime, future);
+  OPENSSL_gmtime(&rawtime, future);
 
   /* Put the future time in a xsDate format. */
   strftime(str, len, "%Y-%m-%dT%H:%M:%S", future);
