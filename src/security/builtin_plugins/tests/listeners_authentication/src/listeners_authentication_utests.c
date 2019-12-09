@@ -757,7 +757,6 @@ validate_local_identity_and_permissions( uint32_t identity_expiry_duration, dds_
     DDS_Security_ValidationResult_t result;
     DDS_Security_DomainId domain_id = 0;
     DDS_Security_Qos participant_qos;
-    DDS_Security_GUID_t candidate_participant_guid;
     DDS_Security_SecurityException exception = {NULL, 0, 0};
     DDS_Security_GuidPrefix_t prefix = {0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb};
     DDS_Security_EntityId_t entityId = {{0xb0,0xb1,0xb2},0x1};
@@ -1261,7 +1260,7 @@ create_asymmetrical_signature_for_test(
     if (!(mdctx = EVP_MD_CTX_create())) {
         char *msg = get_openssl_error_message_for_test();
         result = DDS_SECURITY_VALIDATION_FAILED;
-        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, result, "Failed to create signing context: %s", msg);
+        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, (int)result, "Failed to create signing context: %s", msg);
         ddsrt_free(msg);
         goto err_create_ctx;
     }
@@ -1269,7 +1268,7 @@ create_asymmetrical_signature_for_test(
     if (EVP_DigestSignInit(mdctx, &kctx, EVP_sha256(), NULL, pkey) != 1) {
         char *msg = get_openssl_error_message_for_test();
         result = DDS_SECURITY_VALIDATION_FAILED;
-        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, result, "Failed to initialize signing context: %s", msg);
+        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, (int)result, "Failed to initialize signing context: %s", msg);
         ddsrt_free(msg);
         goto err_sign;
     }
@@ -1277,7 +1276,7 @@ create_asymmetrical_signature_for_test(
     if (EVP_PKEY_CTX_set_rsa_padding(kctx, RSA_PKCS1_PSS_PADDING) < 1) {
         char *msg = get_openssl_error_message_for_test();
         result = DDS_SECURITY_VALIDATION_FAILED;
-        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, result, "Failed to initialize signing context: %s", msg);
+        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, (int)result, "Failed to initialize signing context: %s", msg);
         ddsrt_free(msg);
         goto err_sign;
     }
@@ -1285,7 +1284,7 @@ create_asymmetrical_signature_for_test(
     if (EVP_DigestSignUpdate(mdctx, data, dataLen) != 1) {
         char *msg = get_openssl_error_message_for_test();
         result = DDS_SECURITY_VALIDATION_FAILED;
-        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, result, "Failed to update signing context: %s", msg);
+        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, (int)result, "Failed to update signing context: %s", msg);
         ddsrt_free(msg);
         goto err_sign;
     }
@@ -1293,7 +1292,7 @@ create_asymmetrical_signature_for_test(
     if (EVP_DigestSignFinal(mdctx, NULL, signatureLen) != 1) {
         char *msg = get_openssl_error_message_for_test();
         result = DDS_SECURITY_VALIDATION_FAILED;
-        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, result, "Failed to finalize signing context: %s", msg);
+        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, (int)result, "Failed to finalize signing context: %s", msg);
         ddsrt_free(msg);
         goto err_sign;
     }
@@ -1303,7 +1302,7 @@ create_asymmetrical_signature_for_test(
     if (EVP_DigestSignFinal(mdctx, *signature, signatureLen) != 1) {
         char *msg = get_openssl_error_message_for_test();
         result = DDS_SECURITY_VALIDATION_FAILED;
-        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, result, "Failed to finalize signing context: %s", msg);
+        DDS_Security_Exception_set(ex, "Authentication", DDS_SECURITY_ERR_UNDEFINED_CODE, (int)result, "Failed to finalize signing context: %s", msg);
         ddsrt_free(msg);
         ddsrt_free(signature);
     }
@@ -1948,7 +1947,7 @@ on_revoke_identity_cb( dds_security_authentication_listener *instance,
     } else if (identity_handle_for_callback2 == DDS_SECURITY_HANDLE_NIL) {
         identity_handle_for_callback2 = handle;
     }
-    printf( "Listener called for handle: %lld  Local:%ld Remote:%ld\n", (long long) handle, local_identity_handle, remote_identity_handle2);
+    printf( "Listener called for handle: %lld  Local:%lld Remote:%lld\n", (long long) handle, (long long) local_identity_handle, (long long) remote_identity_handle2);
 
     return true;
 }
