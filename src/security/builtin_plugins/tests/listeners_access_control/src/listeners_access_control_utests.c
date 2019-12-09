@@ -251,14 +251,16 @@ static void reset_exception(DDS_Security_SecurityException *ex)
 static void get_future_xsdate(char *str, size_t len, int32_t delta)
 {
   time_t rawtime;
-  struct tm *future;
+  struct tm *future = ddsrt_malloc(sizeof(struct tm));
 
   /* Get future time. */
   rawtime = time(NULL) + delta;
-  future = gmtime(&rawtime);
+  gmtime_r(&rawtime, future);
 
   /* Put the future time in a xsDate format. */
   strftime(str, len, "%Y-%m-%dT%H:%M:%S", future);
+
+  ddsrt_free(future);
 }
 
 static int smime_sign(const char *certificate_file, const char *key_file, const char *data, const char *out_file)
