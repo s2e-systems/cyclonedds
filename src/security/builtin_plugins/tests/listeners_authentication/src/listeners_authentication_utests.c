@@ -73,6 +73,7 @@ static const char * ALICE_IDENTITY_CERT_FILE        = "Example_Alice_Cert.pem";
 static const char * BOB_IDENTITY_CERT_FILE          = "Example_Bob_Cert.pem";
 static const char * AUTH_DSIGN_ALGO_RSA_NAME   = "RSASSA-PSS-SHA256";
 static const char * AUTH_KAGREE_ALGO_ECDH_NAME = "ECDH+prime256v1-CEUM";
+static DDS_Security_PermissionsHandle remote_permissions_handle = DDS_SECURITY_HANDLE_NIL;
 static dds_security_authentication_listener auth_listener;
 static dds_security_access_control_listener access_control_listener;
 
@@ -222,7 +223,7 @@ struct octet_seq {
 
 static struct plugins_hdl *plugins = NULL;
 static dds_security_authentication *auth = NULL;
-//static dds_security_access_control *access_control = NULL;
+static dds_security_access_control *access_control = NULL;
 static DDS_Security_IdentityHandle local_identity_handle = DDS_SECURITY_HANDLE_NIL;
 static DDS_Security_IdentityHandle remote_identity_handle = DDS_SECURITY_HANDLE_NIL;
 static DDS_Security_IdentityHandle remote_identity_handle2 = DDS_SECURITY_HANDLE_NIL;
@@ -235,9 +236,8 @@ static dds_time_t remote_expiry_date;
 
 #define HANDSHAKE_SIGNATURE_SIZE 6
 
-#ifdef PA_LITTLE_ENDIAN
-unsigned bswap4u (unsigned x);
-unsigned bswap4u (unsigned x)
+#if DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN
+static  unsigned bswap4u (unsigned x)
 {
   return (x >> 24) | ((x >> 8) & 0xff00) | ((x << 8) & 0xff0000) | (x << 24);
 }
@@ -247,7 +247,6 @@ unsigned bswap4u (unsigned x)
 #define toBE4u(x) (x)
 #define fromBE4u(x) (x)
 #endif
-
 
 static const char * PROPERTY_CERT_SUBJECT_NAME      = "dds.cert.sn";
 static const char * PROPERTY_CERT_ALGORITHM         = "dds.cert.algo";
@@ -692,7 +691,7 @@ fill_peer_credential_token(
         token->properties._buffer = DDS_Security_PropertySeq_allocbuf(2);
 
         token->properties._buffer[0].name = ddsrt_strdup(PROPERTY_C_ID);
-        token->properties._buffer[0].value = ddsrt_strdup(&bob_identity_cert[6]);
+        token->properties._buffer[0].value = ddsrt_strdup(&bob_identity_cert[0]);
 
         token->properties._buffer[1].name = ddsrt_strdup(PROPERTY_C_PERM);
         token->properties._buffer[1].value = permission_data;
@@ -791,25 +790,23 @@ validate_local_identity_and_permissions( uint32_t identity_expiry_duration, dds_
     reset_exception(&exception);
 
     if (res == 0) {
-//        local_permissions_handle = access_control->validate_local_permissions(
-//                access_control,
-//                auth,
-//                local_identity_handle,
-//                0,
-//                &participant_qos,
-//                &exception);
+        local_permissions_handle = access_control->validate_local_permissions(
+                access_control,
+                auth,
+                local_identity_handle,
+                0,
+                &participant_qos,
+                &exception);
 
-//        if (local_permissions_handle == DDS_SECURITY_HANDLE_NIL) {
-//            printf("validate_local_permissions_failed: (%d) %s\n", (int)exception.code, exception.message ? exception.message : "Error message missing");
-//            if (exception.code == DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE) {
-//                /* This can happen on very slow platforms or when doing a valgrind run. */
-//                res = DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE;
-//            } else {
-//                res = DDS_SECURITY_ERR_UNDEFINED_CODE;
-//            }
-//        }
-
-
+        if (local_permissions_handle == DDS_SECURITY_HANDLE_NIL) {
+            printf("validate_local_permissions_failed: (%d) %s\n", (int)exception.code, exception.message ? exception.message : "Error message missing");
+            if (exception.code == DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE) {
+                /* This can happen on very slow platforms or when doing a valgrind run. */
+                res = DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE;
+            } else {
+                res = DDS_SECURITY_ERR_UNDEFINED_CODE;
+            }
+        }
     }
 
     dds_security_property_deinit(&participant_qos.property.value);
@@ -846,13 +843,13 @@ clear_local_identity_and_permissions(void)
     DDS_Security_SecurityException exception = {NULL, 0, 0};
     DDS_Security_boolean success;
 
-//    if (local_permissions_handle != DDS_SECURITY_HANDLE_NIL) {
-//        success = access_control->return_permissions_handle(access_control, local_permissions_handle, &exception);
-//        if (!success) {
-//            printf("return_permission_handle failed: %s\n", exception.message ? exception.message : "Error message missing");
-//        }
-//        reset_exception(&exception);
-//    }
+    if (local_permissions_handle != DDS_SECURITY_HANDLE_NIL) {
+        success = access_control->return_permissions_handle(access_control, local_permissions_handle, &exception);
+        if (!success) {
+            printf("return_permission_handle failed: %s\n", exception.message ? exception.message : "Error message missing");
+        }
+        reset_exception(&exception);
+    }
 
     if (local_identity_handle != DDS_SECURITY_HANDLE_NIL) {
         success = auth->return_identity_handle(auth, local_identity_handle, &exception);
@@ -1155,7 +1152,7 @@ CU_Init(ddssec_builtin_listeners_auth)
 {
     int res = 0;
 
-    plugins = load_plugins(NULL   /* Access Control */,
+    plugins = load_plugins(&access_control   /* Access Control */,
                            &auth  /* Authentication */,
                            NULL   /* Cryptograpy    */);
     if (plugins) {
@@ -1987,9 +1984,9 @@ CU_Test(ddssec_builtin_listeners_auth, local_remote_set_before_validation)
     auth_listener.on_revoke_identity = &on_revoke_identity_cb;
 
     auth->set_listener( auth, &auth_listener, &exception);
-//    access_control->set_listener( access_control,
-//                        &access_control_listener,
-//                        &exception);
+    access_control->set_listener( access_control,
+                        &access_control_listener,
+                        &exception);
 
 
     valid = validate_local_identity_and_permissions( 3, &local_expiry_date);
@@ -2013,10 +2010,10 @@ CU_Test(ddssec_builtin_listeners_auth, local_remote_set_before_validation)
 
 
     /* Check if we actually have validate_remote_permissions function. */
-//    CU_ASSERT_FATAL (access_control != NULL);
+    CU_ASSERT_FATAL (access_control != NULL);
     CU_ASSERT_FATAL (local_identity_handle != DDS_SECURITY_HANDLE_NIL);
-//    CU_ASSERT_FATAL (access_control->validate_remote_permissions != NULL);
-//    CU_ASSERT_FATAL (access_control->return_permissions_handle != NULL);
+    CU_ASSERT_FATAL (access_control->validate_remote_permissions != NULL);
+    CU_ASSERT_FATAL (access_control->return_permissions_handle != NULL);
 
     fill_permissions_token(&permissions_token);
     r = fill_peer_credential_token(&credential_token);
@@ -2072,9 +2069,6 @@ CU_Test(ddssec_builtin_listeners_auth, local_remote_set_before_validation)
     CU_ASSERT_FATAL(result == DDS_SECURITY_VALIDATION_OK_FINAL_MESSAGE);
     CU_ASSERT(handshake_handle != DDS_SECURITY_HANDLE_NIL);
 
-
-/*
-
     result = access_control->validate_remote_permissions(
                 access_control,
                 auth,
@@ -2086,14 +2080,16 @@ CU_Test(ddssec_builtin_listeners_auth, local_remote_set_before_validation)
 
     if (result == 0) {
         printf("validate_remote_permissions_failed: %s\n", exception.message ? exception.message : "Error message missing");
-        CU_ASSERT (exception.code == DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE);
-        goto end;
+        //TODO: Clean-up before failing
+        CU_ASSERT_FATAL (exception.code == DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE);
+//        goto end;
+
     }
 
     remote_permissions_handle = result;
 
     reset_exception(&exception);
-*/
+
     while( time_left > 0 && (!local_expired || !remote_expired) ){
         /* Normally, it is expected that the remote expiry is triggered before the
          * local one. However, that can change on slow platforms. */
