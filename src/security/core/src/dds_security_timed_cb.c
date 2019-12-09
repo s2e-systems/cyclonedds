@@ -17,6 +17,7 @@
 
 #include "dds/ddsrt/atomics.h"
 #include "dds/ddsrt/heap.h"
+#include "dds/ddsrt/log.h"
 #include "dds/ddsrt/sync.h"
 #include "dds/ddsrt/threads.h"
 #include "dds/ddsrt/time.h"
@@ -238,10 +239,9 @@ dds_security_timed_dispatcher_enable(
         ddsrt_threadattr_t attr;
         ddsrt_threadattr_init(&attr);
         osres = ddsrt_thread_create(g_thread_ptr, "security_dispatcher", &attr, timed_dispatcher_thread, NULL);
-        if (osres == DDS_RETCODE_ERROR)
+        if (osres != DDS_RETCODE_OK)
         {
-            fprintf(stderr, "Error: cannot create thread security_dispatcher");
-            exit(2);
+            DDS_FATAL("Cannot create thread security_dispatcher");
         }
     } else {
         ddsrt_cond_signal(&g_cond);
@@ -292,7 +292,7 @@ dds_security_timed_dispatcher_add(
     /* Insert event based on trigger_time. */
     ddsrt_mutex_lock(&g_lock);
     if (g_first_event) {
-        struct queue_event_t *last;
+        struct queue_event_t *last = NULL;
         for (event_wrk = g_first_event; event_wrk != NULL; event_wrk = event_wrk->next) {
             last = event_wrk;
             if (event_wrk->trigger_time - event_new->trigger_time > 0) {

@@ -322,10 +322,10 @@ CU_Test(dds_security_timed_cb, test_create_dispatcher)
         } else if ((seq == 0) || (seq == 2) || (seq == 7) || (seq == 5)) {
             expected_d = d2;
             expected_l = d2;
-        } else if ((seq == 9)) {
+        } else if (seq == 9) {
             expected_d = d3;
             expected_l = NULL;
-        } else if ((seq == 99)) {
+        } else if (seq == 99) {
             expected_d = d4;
             expected_l = NULL;
             CU_FAIL("Unexpected callback on a disabled dispatcher");
@@ -411,8 +411,7 @@ CU_Test(dds_security_timed_cb, test_create_dispatcher)
      * Check if deletion callbacks are triggered
      *************************************************************************/
     if (ok) {
-        int idx;
-        int timeout = 200; /* 2 seconds */
+        timeout = 200; /* 2 seconds */
 
         /* Wait for the callbacks to have been triggered.
          * Ignore the ones in the far future. */

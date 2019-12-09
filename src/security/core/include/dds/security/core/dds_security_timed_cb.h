@@ -54,8 +54,6 @@ typedef enum {
  *                      dispatcher (NULL with a deletion trigger).
  * @param arg           User data, provided when adding a callback to the
  *                      related dispatcher.
- *
- * @return              void
  */
 typedef void
 (*dds_security_timed_cb_t) (
@@ -70,8 +68,6 @@ typedef void
  * Create a new dispatcher for timed callbacks.
  * The dispatcher is not enabled (see dds_security_timed_dispatcher_enable).
  *
- * @param               void
- *
  * @return              New (disabled) timed callbacks dispatcher.
  */
 DDS_EXPORT struct dds_security_timed_dispatcher_t*
@@ -84,8 +80,7 @@ dds_security_timed_dispatcher_new(void);
  * is done whether the dispatcher is enabled or not.
  *
  * @param d             The dispatcher to free.
- *
- * @return              void
+ * 
  */
 DDS_EXPORT void
 dds_security_timed_dispatcher_free(
@@ -113,7 +108,6 @@ dds_security_timed_dispatcher_free(
  * @param d             The dispatcher to enable.
  * @param listener      An object that is returned with the callback.
  *
- * @return              void.
  */
 DDS_EXPORT void
 dds_security_timed_dispatcher_enable(
@@ -135,7 +129,6 @@ dds_security_timed_dispatcher_enable(
  *
  * @param d             The dispatcher to disable.
  *
- * @return              void.
  */
 DDS_EXPORT void
 dds_security_timed_dispatcher_disable(
@@ -165,7 +158,6 @@ dds_security_timed_dispatcher_disable(
  * @param trigger_time  A wall-clock time of when to trigger the callback.
  * @param arg           User data that is provided with the callback.
  *
- * @return              void.
  */
 DDS_EXPORT void
 dds_security_timed_dispatcher_add(
