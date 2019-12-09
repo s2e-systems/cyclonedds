@@ -1890,6 +1890,8 @@ validity_callback(struct dds_security_timed_dispatcher_t *d,
                   void *arg)
 {
   validity_cb_info *info = arg;
+
+  DDSRT_UNUSED_ARG(d);
   assert(d);
   assert(arg);
   if (kind == DDS_SECURITY_TIMED_CB_KIND_TIMEOUT)
