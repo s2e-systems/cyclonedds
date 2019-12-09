@@ -568,7 +568,7 @@ static DDS_Security_boolean on_revoke_permissions_cb(dds_security_access_control
     permission_handle_for_callback1 = handle;
   else if (permission_handle_for_callback2 == DDS_SECURITY_HANDLE_NIL)
     permission_handle_for_callback2 = handle;
-  printf("Listener called for handle: %lld  Local:%ld Remote:%ld\n", (long long)handle, local_permissions_handle, remote_permissions_handle);
+  printf("Listener called for handle: %lld  Local:%lld Remote:%lld\n", (long long)handle, (long long)local_permissions_handle, (long long)remote_permissions_handle);
   return true;
 }
 

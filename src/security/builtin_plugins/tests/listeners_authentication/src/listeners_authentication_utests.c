@@ -8,7 +8,6 @@
 
 #include <assert.h>
 
-
 /* Test helper includes. */
 #include "common/src/loader.h"
 
@@ -21,9 +20,9 @@
 #include "dds/ddsrt/string.h"
 #include "dds/ddsrt/misc.h"
 #include "dds/ddsrt/endian.h"
+#include "dds/ddsrt/io.h"
 #include "dds/security/core/dds_security_serialize.h"
 #include "dds/security/core/dds_security_utils.h"
-/* Private header include */
 
 #include <openssl/pem.h>
 #include <openssl/pkcs7.h>
@@ -338,12 +337,6 @@ get_certificate_expiry(
                 BIO_printf(b, "\n");
                 BIO_free(b);
             }
-            {
-                // TODO: GET TIME TO STRING
-//                char date_time[OS_CTIME_R_BUFSIZE];
-//                os_ctimeW_r(&expiry, date_time, sizeof(date_time));
-//                printf("[os_timeW] %s\n", date_time);
-            }
         }
     }
 
@@ -366,7 +359,6 @@ static DDS_Security_boolean create_certificate_from_csr(const char* csr, long va
     BIO *reqbio = NULL;
     BIO *outbio = NULL;
     X509_REQ *certreq = NULL;
-    size_t len;
     char *identity_ca_cert_file;
     char *identity_ca_key_file;
     char* certificate_file;
@@ -387,9 +379,7 @@ static DDS_Security_boolean create_certificate_from_csr(const char* csr, long va
      * Load the signing CA Certificate file                    *
      * ---------------------------------------------------------*/
 
-    len = strlen(path_to_etc_dir) + strlen(IDENTITY_CA_FILE) + 1;
-    identity_ca_cert_file = ddsrt_malloc(len);
-    sprintf(identity_ca_cert_file, "%s%s", path_to_etc_dir, IDENTITY_CA_FILE);
+    ddsrt_asprintf(&identity_ca_cert_file, "%s%s", path_to_etc_dir, IDENTITY_CA_FILE);
 
     if (!(fp = fopen(identity_ca_cert_file, "r"))) {
         BIO_printf(outbio, "Error reading CA cert file\n");
@@ -407,9 +397,7 @@ static DDS_Security_boolean create_certificate_from_csr(const char* csr, long va
      * Import CA private key file for signing                   *
      * ---------------------------------------------------------*/
 
-    len = strlen(path_to_etc_dir) + strlen(IDENTITY_CA_KEY_FILE) + 1;
-    identity_ca_key_file = ddsrt_malloc(len);
-    sprintf(identity_ca_key_file, "%s%s", path_to_etc_dir, IDENTITY_CA_KEY_FILE);
+    ddsrt_asprintf(&identity_ca_key_file, "%s%s", path_to_etc_dir, IDENTITY_CA_KEY_FILE);
 
     if (!(fp = fopen(identity_ca_key_file, "r"))) {
         BIO_printf(outbio, "Error reading CA private key file\n");
@@ -532,10 +520,7 @@ static DDS_Security_boolean create_certificate_from_csr(const char* csr, long va
     /* ------------------------------------------------------------ *
      *  write the certificate to file                               *
      * -------------------------------------------------------------*/
-    len = strlen(path_to_etc_dir) + strlen(outfile) + 1;
-
-    certificate_file = ddsrt_malloc(len);
-    sprintf(certificate_file, "%s%s", path_to_etc_dir, outfile);
+    ddsrt_asprintf(&certificate_file, "%s%s", path_to_etc_dir, outfile);
 
     if (!(fp = fopen(certificate_file, "w"))) {
         BIO_printf(outbio, "Error opening certificate file for write\n");
@@ -579,40 +564,24 @@ fill_participant_qos(
     char *identity_uri;
     char *permissions_file;
 
-    size_t len;
-
     create_certificate_from_csr( alice_csr, validity_duration , ALICE_IDENTITY_CERT_FILE, identity_expiry);
 
     /*permissions ca cert*/
-    len =  strlen(path_to_etc_dir) + strlen(PERMISSIONS_CA_CERT_FILE) + 1;
-    permissions_ca_cert_file = ddsrt_malloc(len);
-    sprintf(permissions_ca_cert_file, "%s%s", path_to_etc_dir, PERMISSIONS_CA_CERT_FILE);
+    ddsrt_asprintf(&permissions_ca_cert_file, "%s%s", path_to_etc_dir, PERMISSIONS_CA_CERT_FILE);
 
-    len = strlen("file:") + strlen(permissions_ca_cert_file) + 1;
-    permissions_ca_uri = ddsrt_malloc(len);
-    sprintf(permissions_ca_uri, "file:%s",  permissions_ca_cert_file);
+    ddsrt_asprintf(&permissions_ca_uri, "file:%s",  permissions_ca_cert_file);
 
     /*Alice Identity*/
-    len =  strlen(path_to_etc_dir) + strlen(ALICE_IDENTITY_CERT_FILE) + 1;
-    identity_file = ddsrt_malloc(len);
-    sprintf(identity_file, "%s%s", path_to_etc_dir, ALICE_IDENTITY_CERT_FILE);
+    ddsrt_asprintf(&identity_file, "%s%s", path_to_etc_dir, ALICE_IDENTITY_CERT_FILE);
 
-    len = strlen("file:") + strlen(identity_file) + 1;
-    identity_uri = ddsrt_malloc(len);
-    sprintf(identity_uri, "file:%s",  identity_file);
+    ddsrt_asprintf(&identity_uri, "file:%s",  identity_file);
 
     /*Alice Permissions */
-    len =  strlen(path_to_etc_dir) + strlen(ALICE_PERMISSIONS_FILE) + 1;
-    permissions_file = ddsrt_malloc(len);
-    sprintf(permissions_file, "%s%s", path_to_etc_dir, ALICE_PERMISSIONS_FILE);
+    ddsrt_asprintf(&permissions_file, "%s%s", path_to_etc_dir, ALICE_PERMISSIONS_FILE);
 
-    len = strlen("file:") + strlen(permissions_file) + 1;
-    permission_uri = ddsrt_malloc(len);
-    sprintf(permission_uri, "file:%s",  permissions_file);
+    ddsrt_asprintf(&permission_uri, "file:%s",  permissions_file);
 
-    len = strlen("file:") + strlen(path_to_etc_dir) + strlen(governance_filename) + 1;
-    governance_uri = ddsrt_malloc(len);
-    sprintf(governance_uri, "file:%s%s", path_to_etc_dir, governance_filename);
+    ddsrt_asprintf(&governance_uri, "file:%s%s", path_to_etc_dir, governance_filename);
 
     memset(qos, 0, sizeof(*qos));
     dds_security_property_init(&qos->property.value, 6);
@@ -664,21 +633,15 @@ fill_peer_credential_token(
 {
     int result = 1;
     char *permission_data;
-    size_t len;
-
-        char *permissions_ca_cert_file;
-        char *permissions_file;
+    char *permissions_ca_cert_file;
+    char *permissions_file;
 
 
     /*permissions ca cert*/
-    len =  strlen(path_to_etc_dir) + strlen(PERMISSIONS_CA_CERT_FILE) + 1;
-    permissions_ca_cert_file = ddsrt_malloc(len);
-    sprintf(permissions_ca_cert_file, "%s%s", path_to_etc_dir, PERMISSIONS_CA_CERT_FILE);
+    ddsrt_asprintf(&permissions_ca_cert_file, "%s%s", path_to_etc_dir, PERMISSIONS_CA_CERT_FILE);
 
     /*permissions ca key*/
-    len =  strlen(path_to_etc_dir) + strlen(BOB_PERMISSIONS_FILE) + 1;
-    permissions_file = ddsrt_malloc(len);
-    sprintf(permissions_file, "%s%s", path_to_etc_dir, BOB_PERMISSIONS_FILE);
+    ddsrt_asprintf(&permissions_file, "%s%s", path_to_etc_dir, BOB_PERMISSIONS_FILE);
 
 
     memset(token, 0, sizeof(DDS_Security_AuthenticatedPeerCredentialToken));
@@ -1974,7 +1937,6 @@ CU_Test(ddssec_builtin_listeners_auth, local_remote_set_before_validation)
     const DDS_Security_BinaryProperty_t *challenge1_glb;
     struct octet_seq dh1_pub_key;
     char *remote_certificate_file;
-    size_t len=0;
 
     local_expiry_date = DDS_TIME_INVALID;
     remote_expiry_date = DDS_TIME_INVALID;
@@ -1996,12 +1958,9 @@ CU_Test(ddssec_builtin_listeners_auth, local_remote_set_before_validation)
     CU_ASSERT_FATAL (valid == DDS_SECURITY_ERR_OK_CODE);
 
     /*Generate remote certificate*/
-    len = strlen(path_to_etc_dir) + strlen(BOB_IDENTITY_CERT_FILE) + 1;
-
     create_certificate_from_csr( bob_csr, 4, BOB_IDENTITY_CERT_FILE, &remote_expiry_date );
 
-    remote_certificate_file = ddsrt_malloc(len);
-    sprintf(remote_certificate_file, "%s%s", path_to_etc_dir, BOB_IDENTITY_CERT_FILE);
+    ddsrt_asprintf(&remote_certificate_file, "%s%s", path_to_etc_dir, BOB_IDENTITY_CERT_FILE);
     bob_identity_cert = load_file_contents( remote_certificate_file );
 
     validate_remote_identity( bob_identity_cert );
