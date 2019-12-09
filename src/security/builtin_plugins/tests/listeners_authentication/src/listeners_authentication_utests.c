@@ -355,7 +355,7 @@ static DDS_Security_boolean create_certificate_from_csr(const char* csr, long va
     X509 *newcert, *cacert;
     X509_NAME *name;
     X509V3_CTX ctx;
-    FILE *fp;
+    BIO *fp;
     BIO *reqbio = NULL;
     BIO *outbio = NULL;
     X509_REQ *certreq = NULL;
@@ -381,17 +381,17 @@ static DDS_Security_boolean create_certificate_from_csr(const char* csr, long va
 
     ddsrt_asprintf(&identity_ca_cert_file, "%s%s", path_to_etc_dir, IDENTITY_CA_FILE);
 
-    if (!(fp = fopen(identity_ca_cert_file, "r"))) {
+    if (!(fp = BIO_new_file(identity_ca_cert_file, "r"))) {
         BIO_printf(outbio, "Error reading CA cert file\n");
         return false;
     }
 
-    if (!(cacert = PEM_read_X509(fp, NULL, NULL, NULL))) {
+    if (!(cacert = PEM_read_bio_X509(fp, NULL, NULL, NULL))) {
         BIO_printf(outbio, "Error loading CA cert into memory\n");
         return false;
     }
 
-    fclose(fp);
+    BIO_free(fp);
 
     /* -------------------------------------------------------- *
      * Import CA private key file for signing                   *
@@ -399,17 +399,17 @@ static DDS_Security_boolean create_certificate_from_csr(const char* csr, long va
 
     ddsrt_asprintf(&identity_ca_key_file, "%s%s", path_to_etc_dir, IDENTITY_CA_KEY_FILE);
 
-    if (!(fp = fopen(identity_ca_key_file, "r"))) {
+    if (!(fp = BIO_new_file(identity_ca_key_file, "r"))) {
         BIO_printf(outbio, "Error reading CA private key file\n");
         return false;
     }
 
-    if (!(ca_privkey = PEM_read_PrivateKey(fp, NULL, NULL, NULL))) {
+    if (!(ca_privkey = PEM_read_bio_PrivateKey(fp, NULL, NULL, NULL))) {
         BIO_printf(outbio, "Error importing key content from file\n");
         return false;
     }
 
-    fclose(fp);
+    BIO_free(fp);
 
     /* --------------------------------------------------------- *
      * Build Certificate with data from request                  *
@@ -522,15 +522,15 @@ static DDS_Security_boolean create_certificate_from_csr(const char* csr, long va
      * -------------------------------------------------------------*/
     ddsrt_asprintf(&certificate_file, "%s%s", path_to_etc_dir, outfile);
 
-    if (!(fp = fopen(certificate_file, "w"))) {
+    if (!(fp = BIO_new_file(certificate_file, "w"))) {
         BIO_printf(outbio, "Error opening certificate file for write\n");
         return false;
     }
-    if (!PEM_write_X509( fp, newcert)) {
+    if (!PEM_write_bio_X509( fp, newcert)) {
         BIO_printf(outbio, "Error writing the signed certificate\n");
         return false;
     }
-    fclose(fp);
+    BIO_free(fp);
 
     *expiry = get_certificate_expiry( newcert );
 
