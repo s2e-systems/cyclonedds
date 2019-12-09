@@ -710,13 +710,13 @@ static void
 serializer_participant_data(
     DDS_Security_ParticipantBuiltinTopicData *pdata,
     unsigned char **buffer,
-    uint32_t *size)
+    size_t *size)
 {
     DDS_Security_Serializer serializer;
     serializer = DDS_Security_Serializer_new(1024, 1024);
 
     DDD_Security_Serialize_ParticipantBuiltinTopicData(serializer, pdata);
-    DDS_Security_Serializer_buffer(serializer, buffer, (size_t*) size);
+    DDS_Security_Serializer_buffer(serializer, buffer, size);
     DDS_Security_Serializer_free(serializer);
 }
 
@@ -763,7 +763,7 @@ validate_local_identity_and_permissions( uint32_t identity_expiry_duration, dds_
     DDS_Security_GUID_t local_participant_guid;
     DDS_Security_ParticipantBuiltinTopicData *local_participant_data;
     unsigned char *sdata;
-    uint32_t sz;
+    size_t sz;
 
     memset(&local_participant_guid, 0, sizeof(local_participant_guid));
     memcpy(&candidate_participant_guid.prefix, &prefix, sizeof(prefix));
@@ -826,7 +826,7 @@ validate_local_identity_and_permissions( uint32_t identity_expiry_duration, dds_
 
     serializer_participant_data(local_participant_data, &sdata, &sz);
 
-    serialized_participant_data._length = serialized_participant_data._maximum = sz;
+    serialized_participant_data._length = serialized_participant_data._maximum = (DDS_Security_unsigned_long) sz;
     serialized_participant_data._buffer = sdata;
 
     DDS_Security_ParticipantBuiltinTopicData_free(local_participant_data);
@@ -1620,7 +1620,7 @@ fill_handshake_message_token(
     DDS_Security_SecurityException exception = {NULL, 0, 0};
     unsigned idx;
     unsigned char *serialized_local_participant_data;
-    uint32_t serialized_local_participant_data_size;
+    size_t serialized_local_participant_data_size;
     /*unsigned hash[32];*/
 
     switch( step )
@@ -1650,7 +1650,7 @@ fill_handshake_message_token(
        set_binary_property_string(c_perm, "c.perm", "permissions_document");
 
        /* Store the provided local_participant_data in the c.pdata property */
-       set_binary_property_value(c_pdata, "c.pdata", serialized_local_participant_data, serialized_local_participant_data_size);
+       set_binary_property_value(c_pdata, "c.pdata", serialized_local_participant_data, (uint32_t)serialized_local_participant_data_size);
        ddsrt_free(serialized_local_participant_data);
 
        /* Set the used signing algorithm descriptor in c.dsign_algo */
@@ -1737,7 +1737,7 @@ fill_handshake_message_token(
         set_binary_property_string(c_perm, "c.perm", "permissions_document");
 
         /* Store the provided local_participant_data in the c.pdata property */
-        set_binary_property_value(c_pdata, "c.pdata", serialized_local_participant_data, serialized_local_participant_data_size);
+        set_binary_property_value(c_pdata, "c.pdata", serialized_local_participant_data, (uint32_t)serialized_local_participant_data_size);
         ddsrt_free(serialized_local_participant_data);
 
         /* Set the used signing algorithm descriptor in c.dsign_algo */
