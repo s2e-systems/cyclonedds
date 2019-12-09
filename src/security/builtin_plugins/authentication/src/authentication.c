@@ -846,10 +846,6 @@ hash_value_to_binary_property(
     return bp;
 }
 
-
-/* Will be enabled after timed callback feature implementation */
-//#if TIMED_CALLBACK_IMPLEMENTED
-
 static void
 validity_callback(struct dds_security_timed_dispatcher_t *d,
                   dds_security_timed_cb_kind kind,
@@ -874,18 +870,12 @@ validity_callback(struct dds_security_timed_dispatcher_t *d,
     ddsrt_free(arg);
 }
 
-//#endif
 
 static void
 add_validity_end_trigger(dds_security_authentication_impl *auth,
                          const DDS_Security_IdentityHandle identity_handle,
                          dds_time_t end)
 {
-    DDSRT_UNUSED_ARG( auth );
-    DDSRT_UNUSED_ARG( identity_handle );
-    DDSRT_UNUSED_ARG( end );
-    /* Will be enabled after timed call back feature implementation */
-
     validity_cb_info *arg = ddsrt_malloc(sizeof(validity_cb_info));
     arg->auth = auth;
     arg->hdl = identity_handle;
@@ -893,7 +883,6 @@ add_validity_end_trigger(dds_security_authentication_impl *auth,
                             validity_callback,
                             end,
                             (void*)arg);
-
 }
 
 
@@ -3174,18 +3163,14 @@ DDS_Security_boolean set_listener(dds_security_authentication *instance,
 {
     dds_security_authentication_impl *auth = (dds_security_authentication_impl*)instance;
 
-    DDSRT_UNUSED_ARG(auth);
-    DDSRT_UNUSED_ARG(listener);
     DDSRT_UNUSED_ARG(ex);
 
-    /* Will be enabled after timed call back feature implementation */
-//#if TIMED_CALLBACK_IMPLEMENTED
     if (listener) {
         dds_security_timed_dispatcher_enable(auth->timed_callbacks, (void*)listener);
     } else {
         dds_security_timed_dispatcher_disable(auth->timed_callbacks);
     }
-//#endif
+
     return true;
 }
 
@@ -3479,8 +3464,7 @@ int32_t finalize_authentication(void *instance)
     if( authentication ){
         ddsrt_mutex_lock(&authentication->lock);
 
-        /* Will be enabled after timed call back feature implementation */
-        /* ut_timed_dispatcher_free(authentication->timed_callbacks); */
+        dds_security_timed_dispatcher_free(authentication->timed_callbacks);
         if (authentication->remoteGuidHash) {
             ddsrt_hh_free(authentication->remoteGuidHash);
         }
