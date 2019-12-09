@@ -854,6 +854,7 @@ validity_callback(struct dds_security_timed_dispatcher_t *d,
 {
     validity_cb_info *info = arg;
 
+    DDSRT_UNUSED_ARG(d);
     assert(d);
     assert(arg);
 
