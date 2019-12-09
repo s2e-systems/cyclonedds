@@ -1201,7 +1201,6 @@ CU_Clean(ddssec_builtin_listeners_auth)
     ddsrt_free(path_to_etc_dir);
     EVP_cleanup();
     CRYPTO_cleanup_all_ex_data();
-    ERR_remove_thread_state(NULL);
     ERR_free_strings();
     return 0;
 }
@@ -1348,22 +1347,22 @@ get_adjusted_participant_guid(
     X509_NAME *name;
     unsigned char *tmp = NULL;
     int i;
-    size_t sz;
+    int sz;
 
     name = X509_get_subject_name(cert);
     sz = i2d_X509_NAME(name, &tmp);
     if (sz > 0) {
-        subject = ddsrt_malloc(sz);
-        memcpy(subject, tmp, sz);
+        subject = ddsrt_malloc((size_t)sz);
+        memcpy(subject, tmp, (size_t)sz);
         OPENSSL_free(tmp);
 
-        SHA256(subject, sz, high);
+        SHA256(subject, (size_t)sz, high);
         SHA256(&candidate->prefix[0], sizeof(DDS_Security_GuidPrefix_t), low);
 
         adjusted->entityId = candidate->entityId;
         for (i = 0; i < 6; i++) {
             adjusted->prefix[i] = hb | high[i]>>1;
-            hb = high[i]<<7;
+            hb = (DDS_Security_octet)(high[i]<<7);
         }
         for (i = 0; i < 6; i++) {
             adjusted->prefix[i+6] = low[i];
@@ -1387,7 +1386,7 @@ create_signature_for_test(
     DDS_Security_ValidationResult_t result;
     DDS_Security_Serializer serializer;
     unsigned char *buffer;
-    uint32_t size;
+    size_t size;
 
     serializer = DDS_Security_Serializer_new(4096, 4096);
 
@@ -1423,7 +1422,7 @@ fill_auth_request_token(
     challenge = ddsrt_malloc(len);
 
     for (i = 0; i < len; i++) {
-        challenge[i] = 0xFF - i;
+        challenge[i] = (unsigned char)(0xFF - i);
     }
 
     memset(token, 0, sizeof(*token));
@@ -1675,7 +1674,7 @@ fill_handshake_message_token(
            DDS_Security_Serializer serializer;
            unsigned char hash1_sent_in_request_arr[32];
            unsigned char *buffer;
-           uint32_t size;
+           size_t size;
 
            bseq._length = bseq._maximum = 5;
            bseq._buffer = tokens;
@@ -1766,7 +1765,7 @@ fill_handshake_message_token(
            DDS_Security_Serializer serializer;
            unsigned char hash2_sent_in_reply_arr[32];
            unsigned char *buffer;
-           uint32_t size;
+           size_t size;
 
            bseq._length = bseq._maximum = 5;
            bseq._buffer = tokens;
@@ -1838,7 +1837,7 @@ fill_handshake_message_token(
             {
                 printf("Exception: %s\n", exception.message);
             }
-            set_binary_property_value(signature, "signature", sign, signlen);
+            set_binary_property_value(signature, "signature", sign, (uint32_t)signlen);
 
             ddsrt_free(sign);
             EVP_PKEY_free(private_key_x509);
@@ -1923,7 +1922,7 @@ fill_handshake_message_token(
             {
                 printf("Exception: %s\n", exception.message);
             }
-            set_binary_property_value(signature, "signature", sign, signlen);
+            set_binary_property_value(signature, "signature", sign, (uint32_t)signlen);
 
             ddsrt_free(sign);
             EVP_PKEY_free(private_key_x509);
@@ -2127,7 +2126,7 @@ CU_Test(ddssec_builtin_listeners_auth, local_remote_set_before_validation)
     DDS_Security_DataHolder_deinit((DDS_Security_DataHolder *) &credential_token);
 
 
-    CU_ASSERT_TRUE (result);
+    CU_ASSERT_TRUE (result == 1);
 
     reset_exception(&exception);
 
