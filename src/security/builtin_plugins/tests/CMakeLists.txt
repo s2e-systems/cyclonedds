@@ -20,9 +20,19 @@ set(security_auth_test_sources
     "process_handshake/src/process_handshake_utests.c"
     "listeners_authentication/src/listeners_authentication_utests.c"
     "common/src/handshake_helper.c"
-    "common/src/loader.c")
+    "common/src/loader.c"
+)
 
-add_cunit_executable(cunit_security_plugins ${security_auth_test_sources})
+set(security_ac_test_sources
+    "get_permissions_credential_token/src/get_permissions_credential_token_utests.c"
+    "get_permissions_token/src/get_permissions_token_utests.c"
+    "get_xxx_sec_attributes/src/get_xxx_sec_attributes_utests.c"
+    # "listeners_access_control/src/listeners_access_control_utests.c"
+    "validate_local_permissions/src/validate_local_permissions_utests.c"
+    "validate_remote_permissions/src/validate_remote_permissions_utests.c"
+)
+
+add_cunit_executable(cunit_security_plugins ${security_auth_test_sources} ${security_ac_test_sources})
 target_include_directories(
   cunit_security_plugins PRIVATE
   "$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/src/include/>"
@@ -36,11 +46,9 @@ target_include_directories(
 
 target_link_libraries(cunit_security_plugins PRIVATE ddsc security_api)
 
-
-find_package(OpenSSL )
+find_package(OpenSSL)
 if(OPENSSL_FOUND)
   target_link_libraries(cunit_security_plugins PRIVATE OpenSSL::SSL)
-
 else()
   message(FATAL_ERROR "To build without openssl support, set DDSC_ENABLE_OPENSSL to OFF")
 endif()
