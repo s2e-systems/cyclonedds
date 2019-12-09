@@ -407,9 +407,9 @@ static int fill_peer_credential_token(DDS_Security_AuthenticatedPeerCredentialTo
   remote_expiry_date = DDS_Security_parse_xml_date(permission_expiry_date_str);
   permissions_xml_with_expiry = ddsrt_str_replace(PERMISSIONS_DOCUMENT, "PERMISSION_EXPIRY_DATE", permission_expiry_date_str, 1);
 
-  ddsrt_asprintf(permissions_ca_cert_file, "%s%s", g_path_to_etc_dir, PERMISSIONS_CA_CERT_FILE);
-  ddsrt_asprintf(permissions_ca_key_file, "%s%s", g_path_to_etc_dir, PERMISSIONS_CA_KEY_FILE);
-  ddsrt_asprintf(permissions_file, "%s%s", g_path_to_etc_dir, PERMISSIONS_FILE);
+  ddsrt_asprintf(&permissions_ca_cert_file, "%s%s", g_path_to_etc_dir, PERMISSIONS_CA_CERT_FILE);
+  ddsrt_asprintf(&permissions_ca_key_file, "%s%s", g_path_to_etc_dir, PERMISSIONS_CA_KEY_FILE);
+  ddsrt_asprintf(&permissions_file, "%s%s", g_path_to_etc_dir, PERMISSIONS_FILE);
 
   smime_sign(permissions_ca_cert_file, permissions_ca_key_file, permissions_xml_with_expiry, permissions_file);
 
@@ -532,16 +532,23 @@ static void set_path_to_etc_dir(void)
   ddsrt_asprintf(&g_path_to_etc_dir, "%s%s", CONFIG_ENV_TESTS_DIR, RELATIVE_PATH_TO_ETC_DIR);
 }
 
-static void suite_listeners_access_control_init(void)
+CU_Init(ddssec_builtin_listeners_access_control)
 {
+  int res = 0;
+
   plugins = load_plugins(&access_control, &auth, NULL /* Cryptograpy */);
-  CU_ASSERT_FATAL(plugins != NULL);
-  set_path_to_etc_dir();
-  OpenSSL_add_all_algorithms();
-  ERR_load_crypto_strings();
+  if (!plugins) {
+    res = -1;
+  } else {
+    set_path_to_etc_dir();
+    OpenSSL_add_all_algorithms();
+    ERR_load_crypto_strings();
+  }
+
+  return res;
 }
 
-static void suite_listeners_access_control_fini(void)
+CU_Clean(ddssec_builtin_listeners_access_control)
 {
   unload_plugins(plugins);
   ddsrt_free(g_path_to_etc_dir);
@@ -549,6 +556,8 @@ static void suite_listeners_access_control_fini(void)
   CRYPTO_cleanup_all_ex_data();
   REMOVE_THREAD_STATE();
   ERR_free_strings();
+
+  return 0;
 }
 
 static DDS_Security_boolean on_revoke_permissions_cb(dds_security_access_control_listener *instance, const dds_security_access_control *plugin, const DDS_Security_PermissionsHandle handle)
@@ -563,7 +572,7 @@ static DDS_Security_boolean on_revoke_permissions_cb(dds_security_access_control
   return true;
 }
 
-CU_Test(ddssec_builtin_listeners_access_control, local_2secs, .init = suite_listeners_access_control_init, .fini = suite_listeners_access_control_fini)
+CU_Test(ddssec_builtin_listeners_access_control, local_2secs)
 {
   DDS_Security_PermissionsHandle result;
   DDS_Security_PermissionsToken permissions_token;

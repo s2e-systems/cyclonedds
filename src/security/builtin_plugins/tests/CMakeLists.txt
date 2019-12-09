@@ -27,7 +27,7 @@ set(security_ac_test_sources
     "get_permissions_credential_token/src/get_permissions_credential_token_utests.c"
     "get_permissions_token/src/get_permissions_token_utests.c"
     "get_xxx_sec_attributes/src/get_xxx_sec_attributes_utests.c"
-    # "listeners_access_control/src/listeners_access_control_utests.c"
+    "listeners_access_control/src/listeners_access_control_utests.c"
     "validate_local_permissions/src/validate_local_permissions_utests.c"
     "validate_remote_permissions/src/validate_remote_permissions_utests.c"
 )
