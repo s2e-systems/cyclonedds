@@ -13,6 +13,7 @@ include (GenerateExportHeader)
 include (CUnit)
 
 set(security_core_test_sources
+    "tc_fsm.c"
     "dds_security_core.c"
   )
 
@@ -27,14 +28,10 @@ target_include_directories(
         "$<BUILD_INTERFACE:$<TARGET_PROPERTY:security_core,INTERFACE_INCLUDE_DIRECTORIES>>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../../../../core/ddsi/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../core/ddsi/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../core/ddsc/src>"
  )
 
 
 target_link_libraries(cunit_security_core PRIVATE ddsc security_api)
 target_include_directories(cunit_security_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-
-set(CUnit_plugin_mock_dir ".")
-
-
-# configure_file("config_env.h.in" "config_env.h")
