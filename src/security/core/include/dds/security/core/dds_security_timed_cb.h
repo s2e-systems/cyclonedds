@@ -25,7 +25,7 @@ extern "C" {
  */
 struct dds_security_timed_dispatcher_t;
 
-
+struct dds_security_timed_cb_data_t;
 
 /**
  * The callback is triggered by two causes:
@@ -62,7 +62,12 @@ typedef void
         void *listener,
         void *arg);
 
+DDS_EXPORT struct dds_security_timed_cb_data*
+dds_security_timed_cb_new(void);
 
+DDS_EXPORT void
+dds_security_timed_cb_free(
+        struct dds_security_timed_cb_data *dl);
 
 /**
  * Create a new dispatcher for timed callbacks.
@@ -71,7 +76,8 @@ typedef void
  * @return              New (disabled) timed callbacks dispatcher.
  */
 DDS_EXPORT struct dds_security_timed_dispatcher_t*
-dds_security_timed_dispatcher_new(void);
+dds_security_timed_dispatcher_new(
+        struct dds_security_timed_cb_data *tcb);
 
 /**
  * Frees the given dispatcher.
@@ -84,6 +90,7 @@ dds_security_timed_dispatcher_new(void);
  */
 DDS_EXPORT void
 dds_security_timed_dispatcher_free(
+        struct dds_security_timed_cb_data *tcb,
         struct dds_security_timed_dispatcher_t *d);
 
 
@@ -111,6 +118,7 @@ dds_security_timed_dispatcher_free(
  */
 DDS_EXPORT void
 dds_security_timed_dispatcher_enable(
+        struct dds_security_timed_cb_data *tcb,
         struct dds_security_timed_dispatcher_t *d,
         void *listener);
 
@@ -132,6 +140,7 @@ dds_security_timed_dispatcher_enable(
  */
 DDS_EXPORT void
 dds_security_timed_dispatcher_disable(
+        struct dds_security_timed_cb_data *tcb,
         struct dds_security_timed_dispatcher_t *d);
 
 
@@ -161,6 +170,7 @@ dds_security_timed_dispatcher_disable(
  */
 DDS_EXPORT void
 dds_security_timed_dispatcher_add(
+        struct dds_security_timed_cb_data *tcb,
         struct dds_security_timed_dispatcher_t *d,
         dds_security_timed_cb_t cb,
         dds_time_t trigger_time,
