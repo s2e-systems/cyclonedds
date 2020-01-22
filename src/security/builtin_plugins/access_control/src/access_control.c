@@ -80,7 +80,8 @@ typedef struct dds_security_access_control_impl
 #endif
   struct AccessControlTable *remote_permissions;
 
-  struct dds_security_timed_dispatcher_t *timed_callbacks;
+  struct dds_security_timed_cb_data *timed_callbacks;
+  struct dds_security_timed_dispatcher_t *dispatcher;
 
 } dds_security_access_control_impl;
 
@@ -924,9 +925,9 @@ set_listener(dds_security_access_control *instance,
 
   dds_security_access_control_impl *ac = (dds_security_access_control_impl *)instance;
   if (listener)
-    dds_security_timed_dispatcher_enable(ac->timed_callbacks, (void *)listener);
+    dds_security_timed_dispatcher_enable(ac->timed_callbacks, ac->dispatcher, (void *)listener);
   else
-    dds_security_timed_dispatcher_disable(ac->timed_callbacks);
+    dds_security_timed_dispatcher_disable(ac->timed_callbacks, ac->dispatcher);
 
   return true;
 }
@@ -1482,7 +1483,8 @@ int init_access_control(const char *argument, void **context)
   memset(access_control, 0, sizeof(*access_control));
 
 
-  access_control->timed_callbacks = dds_security_timed_dispatcher_new();
+  access_control->timed_callbacks = dds_security_timed_cb_new();
+  access_control->dispatcher = dds_security_timed_dispatcher_new(access_control->timed_callbacks);
   access_control->base.validate_local_permissions = &validate_local_permissions;
   access_control->base.validate_remote_permissions = &validate_remote_permissions;
   access_control->base.check_create_participant = &check_create_participant;
@@ -1915,7 +1917,7 @@ add_validity_end_trigger(dds_security_access_control_impl *ac,
   validity_cb_info *arg = ddsrt_malloc(sizeof(validity_cb_info));
   arg->ac = ac;
   arg->hdl = permissions_handle;
-  dds_security_timed_dispatcher_add(ac->timed_callbacks, validity_callback, end, (void *)arg);
+  dds_security_timed_dispatcher_add(ac->timed_callbacks, ac->dispatcher, validity_callback, end, (void *)arg);
 }
 
 static DDS_Security_boolean
@@ -2473,7 +2475,8 @@ int finalize_access_control(void *context)
   if (access_control)
   {
 
-    dds_security_timed_dispatcher_free(access_control->timed_callbacks);
+    dds_security_timed_dispatcher_free(access_control->timed_callbacks, access_control->dispatcher);
+    dds_security_timed_cb_free(access_control->timed_callbacks);
 
     access_control_table_free(access_control->remote_permissions);
 #ifdef ACCESS_CONTROL_USE_ONE_PERMISSION

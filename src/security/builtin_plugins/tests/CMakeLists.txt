@@ -21,6 +21,8 @@ set(security_auth_test_sources
     "validate_begin_handshake_request/src/validate_begin_handshake_request_utests.c"
     "validate_local_identity/src/validate_local_identity_utests.c"
     "validate_remote_identity/src/validate_remote_identity_utests.c"
+    "listeners_authentication/src/listeners_authentication_utests.c"
+    "listeners_access_control/src/listeners_access_control_utests.c"
 )
 
 set(security_crypto_test_sources

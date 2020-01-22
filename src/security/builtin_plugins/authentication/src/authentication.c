@@ -203,7 +203,8 @@ typedef struct dds_security_authentication_impl {
     ddsrt_mutex_t lock;
     struct ddsrt_hh *objectHash;
     struct ddsrt_hh *remoteGuidHash;
-    struct dds_security_timed_dispatcher_t *timed_callbacks;
+    struct dds_security_timed_cb_data *timed_callbacks;
+    struct dds_security_timed_dispatcher_t *dispatcher;
     X509Seq trustedCAList;
 
 
@@ -879,7 +880,7 @@ add_validity_end_trigger(dds_security_authentication_impl *auth,
     validity_cb_info *arg = ddsrt_malloc(sizeof(validity_cb_info));
     arg->auth = auth;
     arg->hdl = identity_handle;
-    dds_security_timed_dispatcher_add(auth->timed_callbacks,
+    dds_security_timed_dispatcher_add(auth->timed_callbacks, auth->dispatcher,
                             validity_callback,
                             end,
                             (void*)arg);
@@ -3164,9 +3165,9 @@ DDS_Security_boolean set_listener(dds_security_authentication *instance,
     DDSRT_UNUSED_ARG(ex);
 
     if (listener) {
-        dds_security_timed_dispatcher_enable(auth->timed_callbacks, (void*)listener);
+        dds_security_timed_dispatcher_enable(auth->timed_callbacks, auth->dispatcher, (void*)listener);
     } else {
-        dds_security_timed_dispatcher_disable(auth->timed_callbacks);
+        dds_security_timed_dispatcher_disable(auth->timed_callbacks, auth->dispatcher);
     }
 
     return true;
@@ -3385,7 +3386,8 @@ init_authentication( const char *argument, void **context)
     memset(authentication, 0, sizeof(dds_security_authentication_impl));
 
     /* assign dispatcher to be notified when a validity date ends */
-    authentication->timed_callbacks = dds_security_timed_dispatcher_new();
+    authentication->timed_callbacks = dds_security_timed_cb_new();
+    authentication->dispatcher = dds_security_timed_dispatcher_new(authentication->timed_callbacks);
 
     /* assign the interface functions */
     authentication->base.validate_local_identity = &validate_local_identity;
@@ -3460,7 +3462,9 @@ int32_t finalize_authentication(void *instance)
     if( authentication ){
         ddsrt_mutex_lock(&authentication->lock);
 
-        dds_security_timed_dispatcher_free(authentication->timed_callbacks);
+        dds_security_timed_dispatcher_free(authentication->timed_callbacks, authentication->dispatcher);
+        dds_security_timed_cb_free(authentication->timed_callbacks);
+
         if (authentication->remoteGuidHash) {
             ddsrt_hh_free(authentication->remoteGuidHash);
         }
