@@ -107,7 +107,6 @@ static struct topic_rule *find_topic_from_domain_rule(struct domain_rule *domain
 static DDS_Security_boolean domainid_within_sets(struct domain_id_set *domain, int domain_id);
 static DDS_Security_boolean compare_class_id_plugin_classname(DDS_Security_string class_id_1, DDS_Security_string class_id_2);
 static DDS_Security_boolean compare_class_id_major_ver(DDS_Security_string class_id_1, DDS_Security_string class_id_2);
-static void release_local_access_rights(local_participant_access_rights *rights);
 static void add_validity_end_trigger(dds_security_access_control_impl *ac, const DDS_Security_PermissionsHandle permissions_handle, dds_time_t end);
 static DDS_Security_boolean is_allowed_by_permissions(struct permissions_parser *permissions, int domain_id, const char *topic_name, const DDS_Security_PartitionQosPolicy *partitions,
     const char *identity_subject_name, permission_criteria_type criteria_type, DDS_Security_SecurityException *ex);
@@ -258,7 +257,7 @@ check_create_participant(dds_security_access_control *instance,
   DDS_Security_ParticipantSecurityAttributes participantSecurityAttributes;
   DDS_Security_boolean result = false;
 
-  if (instance == NULL || permissions_handle == DDS_SECURITY_HANDLE_NIL ||participant_qos == NULL)
+  if (instance == NULL || permissions_handle == DDS_SECURITY_HANDLE_NIL || participant_qos == NULL)
   {
     DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_INVALID_PARAMETER_CODE, 0, DDS_SECURITY_ERR_INVALID_PARAMETER_MESSAGE);
     return false;
@@ -272,15 +271,16 @@ check_create_participant(dds_security_access_control *instance,
   }
 
   /* Retrieve domain rules */
-  if ((find_domain_rule_in_governance(rights->governance_tree->dds->domain_access_rules->domain_rule, domain_id)) == NULL ||
-      domainRule->topic_access_rules == NULL || domainRule->topic_access_rules->topic_rule == NULL)
+  domainRule = find_domain_rule_in_governance(rights->governance_tree->dds->domain_access_rules->domain_rule, domain_id);
+  if (domainRule == NULL || domainRule->topic_access_rules == NULL || domainRule->topic_access_rules->topic_rule == NULL)
   {
     DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_CAN_NOT_FIND_DOMAIN_IN_GOVERNANCE_CODE, 0, DDS_SECURITY_ERR_CAN_NOT_FIND_DOMAIN_IN_GOVERNANCE_MESSAGE, domain_id);
     goto exit;
   }
 
   /* Iterate over topics rules*/
-  while ((topicRule = domainRule->topic_access_rules->topic_rule) != NULL)
+  topicRule = domainRule->topic_access_rules->topic_rule;
+  while (topicRule != NULL)
   {
     if (!topicRule->enable_read_access_control->value || !topicRule->enable_write_access_control->value)
     {
@@ -305,7 +305,7 @@ check_create_participant(dds_security_access_control *instance,
   result = is_allowed_by_permissions(rights->permissions_tree, domain_id, NULL /* topic_name */, NULL /* partitions */, rights->identity_subject_name, UNKNOWN_CRITERIA, ex);
 
 exit:
-  release_local_access_rights(rights);
+  ACCESS_CONTROL_OBJECT_RELEASE(rights);
   return result;
 }
 
@@ -1063,7 +1063,7 @@ domainid_within_sets(
   int32_t min;
   int32_t max;
 
-  while ((domain != NULL) && (!found))
+  while (domain != NULL && !found)
   {
     assert(domain->min);
     min = domain->min->value;
@@ -1245,11 +1245,11 @@ find_topic_from_domain_rule(
   struct topic_rule *topic_rule;
   struct topic_rule *topic_found = NULL;
 
-  if ((domain_rule->topic_access_rules != NULL) &&
-      (domain_rule->topic_access_rules->topic_rule != NULL))
+  if (domain_rule->topic_access_rules != NULL &&
+      domain_rule->topic_access_rules->topic_rule != NULL)
   {
     topic_rule = domain_rule->topic_access_rules->topic_rule;
-    while ((topic_rule != NULL) && (topic_found == NULL))
+    while (topic_rule != NULL && topic_found == NULL)
     {
       assert(topic_rule->topic_expression);
       if (ac_fnmatch(topic_rule->topic_expression->value, topic_name))
@@ -1283,7 +1283,7 @@ get_topic_sec_attributes(
     DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_INVALID_PARAMETER_CODE, 0, "No permissions handle provided");
     return false;
   }
-  if ((topic_name == NULL) || (strlen(topic_name) == 0))
+  if (topic_name == NULL || strlen(topic_name) == 0)
   {
     DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_INVALID_PARAMETER_CODE, 0, "No topic name provided");
     return false;
@@ -1576,11 +1576,11 @@ get_sec_attributes(
               /* payload encrypted */
               false,
               /* submsg encrypted */
-              (found->liveliness_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT) ||
-                  (found->liveliness_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION),
+              found->liveliness_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT ||
+                  found->liveliness_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION,
               /* submsg authenticated */
-              (found->liveliness_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION) ||
-                  (found->liveliness_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_SIGN_WITH_ORIGIN_AUTHENTICATION));
+              found->liveliness_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION ||
+                  found->liveliness_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_SIGN_WITH_ORIGIN_AUTHENTICATION);
         }
         else
         {
@@ -1589,11 +1589,11 @@ get_sec_attributes(
               /* payload encrypted */
               false,
               /* submsg encrypted */
-              (found->discovery_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT) ||
-                  (found->discovery_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION),
+              found->discovery_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT ||
+                  found->discovery_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION,
               /* submsg authenticated */
-              (found->discovery_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION) ||
-                  (found->discovery_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_SIGN_WITH_ORIGIN_AUTHENTICATION));
+              found->discovery_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION ||
+                  found->discovery_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_SIGN_WITH_ORIGIN_AUTHENTICATION);
         }
       }
       else
@@ -1649,19 +1649,17 @@ get_sec_attributes(
         attributes->is_liveliness_protected = topic_rule->enable_liveliness_protection->value;
         attributes->is_read_protected = topic_rule->enable_read_access_control->value;
         attributes->is_write_protected = topic_rule->enable_write_access_control->value;
-        attributes->is_payload_protected = topic_rule->data_protection_kind->value == DDS_SECURITY_BASICPROTECTION_KIND_NONE ? false : true;
-        attributes->is_submessage_protected = topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_NONE ? false : true;
-        attributes->is_key_protected = topic_rule->data_protection_kind->value == DDS_SECURITY_BASICPROTECTION_KIND_ENCRYPT ? true : false;
+        attributes->is_payload_protected = topic_rule->data_protection_kind->value != DDS_SECURITY_BASICPROTECTION_KIND_NONE;
+        attributes->is_submessage_protected = topic_rule->metadata_protection_kind->value != DDS_SECURITY_PROTECTION_KIND_NONE;
+        attributes->is_key_protected = topic_rule->data_protection_kind->value == DDS_SECURITY_BASICPROTECTION_KIND_ENCRYPT;
 
         /*calculate and assign the mask */
         attributes->plugin_endpoint_attributes = get_plugin_endpoint_security_attributes_mask(
-            topic_rule->data_protection_kind->value == DDS_SECURITY_BASICPROTECTION_KIND_ENCRYPT ? true : false,
-            (topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT) ||
-                    (topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION)
-                ? true : false,
-            (topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION) ||
-                    (topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_SIGN_WITH_ORIGIN_AUTHENTICATION)
-                ? true : false);
+            topic_rule->data_protection_kind->value == DDS_SECURITY_BASICPROTECTION_KIND_ENCRYPT,
+            topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT ||
+                    topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION,
+            topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_ENCRYPT_WITH_ORIGIN_AUTHENTICATION ||
+                    topic_rule->metadata_protection_kind->value == DDS_SECURITY_PROTECTION_KIND_SIGN_WITH_ORIGIN_AUTHENTICATION);
 
         memset(&attributes->ac_endpoint_properties, 0, sizeof(DDS_Security_PropertySeq));
         result = true;
@@ -1695,7 +1693,6 @@ sanity_check_local_access_rights(
     local_participant_access_rights *rights)
 {
 #ifndef NDEBUG
-  /* Just some sanity checks. */
   if (rights)
   {
     assert(rights->permissions_document);
@@ -1754,14 +1751,6 @@ find_local_access_rights(
 
   sanity_check_local_access_rights(rights);
   return rights;
-}
-
-static void
-release_local_access_rights(local_participant_access_rights *rights)
-{
-#ifdef ACCESS_CONTROL_USE_ONE_PERMISSION
-  ACCESS_CONTROL_OBJECT_RELEASE(rights);
-#endif
 }
 
 struct find_by_identity_arg
@@ -1892,8 +1881,6 @@ validity_callback(struct dds_security_timed_dispatcher_t *d,
                   void *arg)
 {
   validity_cb_info *info = arg;
-
-  DDSRT_UNUSED_ARG(d);
   assert(d);
   assert(arg);
   if (kind == DDS_SECURITY_TIMED_CB_KIND_TIMEOUT)
@@ -1947,12 +1934,17 @@ is_allowed_by_permissions(struct permissions_parser *permissions,
         permissions_grant->subject_name->value != NULL &&
         strcmp(permissions_grant->subject_name->value, identity_subject_name) == 0)
     {
-      dds_time_t tnow = dds_time ();
-      if (tnow <= DDS_Security_parse_xml_date(permissions_grant->validity->not_before->value) ||
-          tnow >= DDS_Security_parse_xml_date(permissions_grant->validity->not_after->value))
+      dds_time_t tnow = dds_time();
+      if (tnow <= DDS_Security_parse_xml_date(permissions_grant->validity->not_before->value))
       {
-        DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_PERMISSIONS_OUT_OF_VALIDITY_DATE_CODE, 0,
-            DDS_SECURITY_ERR_PERMISSIONS_OUT_OF_VALIDITY_DATE_MESSAGE, permissions_grant->subject_name->value, permissions_grant->validity->not_before->value, permissions_grant->validity->not_after->value);
+        DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_VALIDITY_PERIOD_NOT_STARTED_CODE, 0,
+            DDS_SECURITY_ERR_VALIDITY_PERIOD_NOT_STARTED_MESSAGE, permissions_grant->subject_name->value, permissions_grant->validity->not_before->value);
+        return false;
+      }
+      if (tnow >= DDS_Security_parse_xml_date(permissions_grant->validity->not_after->value))
+      {
+        DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE, 0,
+            DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_MESSAGE, permissions_grant->subject_name->value, permissions_grant->validity->not_after->value);
         return false;
       }
 
@@ -2116,29 +2108,24 @@ validate_subject_name_in_permissions(struct permissions_parser *permissions_tree
     if (identity_subject_name != NULL && ac_check_subjects_are_equal(permissions_grant->subject_name->value, identity_subject_name))
     {
       dds_time_t tnow = dds_time ();
-      if (tnow > DDS_Security_parse_xml_date(permissions_grant->validity->not_before->value))
-      {
-        if (tnow < DDS_Security_parse_xml_date(permissions_grant->validity->not_after->value))
-        {
-          /* identity subject name and permission subject name may not be exactly same because of different string representations
-                    * That's why we are returning the string in permissions file to be stored for further comparisons*/
-          *permission_subject_name = ddsrt_strdup(permissions_grant->subject_name->value);
-          *permission_validity_not_after = DDS_Security_parse_xml_date(permissions_grant->validity->not_after->value);
-          return true;
-        }
-        else
-        {
-          DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE, 0,
-              DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_MESSAGE, permissions_grant->subject_name->value);
-          return false;
-        }
-      }
-      else
+      if (tnow <= DDS_Security_parse_xml_date(permissions_grant->validity->not_before->value))
       {
         DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_VALIDITY_PERIOD_NOT_STARTED_CODE, 0,
-            DDS_SECURITY_ERR_VALIDITY_PERIOD_NOT_STARTED_MESSAGE, permissions_grant->subject_name->value);
+            DDS_SECURITY_ERR_VALIDITY_PERIOD_NOT_STARTED_MESSAGE, permissions_grant->subject_name->value, permissions_grant->validity->not_before->value);
         return false;
       }
+      if (tnow >= DDS_Security_parse_xml_date(permissions_grant->validity->not_after->value))
+      {
+        DDS_Security_Exception_set(ex, DDS_ACCESS_CONTROL_PLUGIN_CONTEXT, DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_CODE, 0,
+            DDS_SECURITY_ERR_VALIDITY_PERIOD_EXPIRED_MESSAGE, permissions_grant->subject_name->value, permissions_grant->validity->not_after->value);
+        return false;
+      }
+
+      /* identity subject name and permission subject name may not be exactly same because of different string representations
+        * That's why we are returning the string in permissions file to be stored for further comparisons */
+      *permission_subject_name = ddsrt_strdup(permissions_grant->subject_name->value);
+      *permission_validity_not_after = DDS_Security_parse_xml_date(permissions_grant->validity->not_after->value);
+      return true;
     }
     permissions_grant = (struct grant *)permissions_grant->node.next;
   }
@@ -2450,17 +2437,11 @@ get_topic_type(
       type = TOPIC_TYPE_SECURE_SubscriptionsSecure; /* DCPSSubscriptionsSecure */
     else if (strcmp(&(topic_name[4]), "PublicationsSecure") == 0)
       type = TOPIC_TYPE_SECURE_PublicationsSecure; /* DCPSPublicationsSecure */
-    else if ((strcmp(&(topic_name[4]), "Type") == 0) ||
-             (strcmp(&(topic_name[4]), "Topic") == 0) ||
-             (strcmp(&(topic_name[4]), "Delivery") == 0) ||
-             (strcmp(&(topic_name[4]), "Heartbeat") == 0) ||
+    else if ((strcmp(&(topic_name[4]), "Topic") == 0) ||
              (strcmp(&(topic_name[4]), "Publication") == 0) ||
              (strcmp(&(topic_name[4]), "Subscription") == 0))
     {
-      /* DCPSType         */
       /* DCPSTopic        */
-      /* DCPSDelivery     */
-      /* DCPSHeartbeat    */
       /* DCPSPublication  */
       /* DCPSSubscription */
       type = TOPIC_TYPE_NON_SECURE_BUILTIN;
