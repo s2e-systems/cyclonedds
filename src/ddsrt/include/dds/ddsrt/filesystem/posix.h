@@ -15,11 +15,12 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <limits.h>
 
 typedef DIR *ddsrt_dirHandle;
 typedef mode_t ddsrt_mode_t;
 
-#define DDSRT_PATH_MAX _POSIX_PATH_MAX
+#define DDSRT_PATH_MAX PATH_MAX
 #define DDSRT_FILESEPCHAR '/'
 
 #if defined(__cplusplus)
