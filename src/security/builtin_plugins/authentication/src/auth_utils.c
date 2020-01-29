@@ -30,6 +30,8 @@
 #include <openssl/rand.h>
 #include "dds/ddsrt/time.h"
 #include "dds/ddsrt/heap.h"
+#include "dds/ddsrt/filesystem.h"
+#include "dds/ddsrt/retcode.h"
 #include "dds/security/dds_security_api_defs.h"
 #include "dds/security/core/dds_security_utils.h"
 #include <assert.h>
@@ -1190,40 +1192,35 @@ get_trusted_ca_list ( const char* trusted_ca_dir,
 
 
     DDS_Security_ValidationResult_t loading_result = DDS_RETCODE_OK;
-    DDSRT_UNUSED_ARG( ca_list );
-    DDSRT_UNUSED_ARG( trusted_ca_dir );
-    DDSRT_UNUSED_ARG( ex );
-/* TODO: Trusted CA directory tracing function should be ported */
-/* TODO: MAX_TRUSTED_CA limitation will be removed */
-#ifdef TRUSTED_CA_LIST_IMPLEMENTED
 
-    os_result        r;
-    os_dirHandle     d_descr;
-    struct os_dirent d_entry;
-    struct os_stat_s status;
+    dds_return_t        r;
+    ddsrt_dirHandle     d_descr;
+    struct ddsrt_dirent d_entry;
+    struct ddsrt_stat status;
     char *full_file_path;
     char *trusted_ca_dir_normalized;
+    size_t full_file_path_size;
 
     X509 *ca_buffer_array[MAX_TRUSTED_CA]; /*max trusted CA size */
     unsigned ca_buffer_array_size=0;
     unsigned i;
-    trusted_ca_dir_normalized  = os_fileNormalize(trusted_ca_dir);
+    trusted_ca_dir_normalized  = ddsrt_fileNormalize(trusted_ca_dir);
 
-    r = os_opendir(trusted_ca_dir_normalized, &d_descr);
+    r = ddsrt_opendir(trusted_ca_dir_normalized, &d_descr);
     ddsrt_free ( trusted_ca_dir_normalized );
+    if (r == DDS_RETCODE_OK && ca_buffer_array_size < MAX_TRUSTED_CA) { /* accessable */
+        r = ddsrt_readdir(d_descr, &d_entry);
+        while (r == DDS_RETCODE_OK) {
+            full_file_path_size = strlen(trusted_ca_dir) + strlen(ddsrt_fileSep()) + strlen(d_entry.d_name) + strlen(ddsrt_fileSep()) + 1 ;
+            full_file_path = (char*) ddsrt_malloc(full_file_path_size);
+            ddsrt_strlcpy(full_file_path, trusted_ca_dir, full_file_path_size);
+            ddsrt_strlcat(full_file_path, ddsrt_fileSep(), full_file_path_size);
+            ddsrt_strlcat(full_file_path, d_entry.d_name, full_file_path_size);
 
-    if (r == os_resultSuccess && ca_buffer_array_size < MAX_TRUSTED_CA) { /* accessable */
-        r = os_readdir(d_descr, &d_entry);
-        while (r == os_resultSuccess) {
-            full_file_path = (char*) ddsrt_malloc(strlen(trusted_ca_dir) + strlen(os_fileSep()) + strlen(d_entry.d_name) + strlen(os_fileSep()) + 1 );
-            ddsrt_strcpy(full_file_path, trusted_ca_dir);
-            ddsrt_strcat(full_file_path, os_fileSep());
-            ddsrt_strcat(full_file_path, d_entry.d_name);
-
-            if (os_stat (full_file_path, &status) == os_resultSuccess) { /* accessable */
+            if (ddsrt_stat (full_file_path, &status) == DDS_RETCODE_OK) { /* accessable */
                 if ((strcmp(d_entry.d_name, ".") != 0) &&
                     (strcmp(d_entry.d_name, "..") != 0)) {
-                    char * filename = os_fileNormalize(full_file_path);
+                    char * filename = ddsrt_fileNormalize(full_file_path);
 
                     if(filename){
                         X509 *identityCA;
@@ -1239,26 +1236,26 @@ get_trusted_ca_list ( const char* trusted_ca_dir,
                     }
                 }
             }
-            r = os_readdir(d_descr, &d_entry);
+            r = ddsrt_readdir(d_descr, &d_entry);
 
             ddsrt_free(full_file_path);
         }
 
-        os_closedir (d_descr);
+        ddsrt_closedir (d_descr);
 
         /* deallocate given ca_list if it is not NULL */
         free_ca_list_contents(ca_list);
 
         /*copy CAs to out parameter as HASH*/
         if( ca_buffer_array_size > 0 ){
-            ca_list->_buffer = ddsrt_malloc( ca_buffer_array_size * sizeof(X509 * ) );
+            ca_list->buffer = ddsrt_malloc( ca_buffer_array_size * sizeof(X509 * ) );
             for (i = 0; i < ca_buffer_array_size; ++i) {
-                ca_list->_buffer[i] = ca_buffer_array[i];
+                ca_list->buffer[i] = ca_buffer_array[i];
 
             }
 
         }
-        ca_list->_length = ca_buffer_array_size;
+        ca_list->length = ca_buffer_array_size;
 
         return DDS_SECURITY_VALIDATION_OK;
 
@@ -1267,7 +1264,6 @@ get_trusted_ca_list ( const char* trusted_ca_dir,
         DDS_Security_Exception_set(ex, DDS_AUTH_PLUGIN_CONTEXT, DDS_SECURITY_ERR_INVALID_TRUSTED_CA_DIR_CODE, 0, DDS_SECURITY_ERR_INVALID_TRUSTED_CA_DIR_MESSAGE);
         return DDS_SECURITY_VALIDATION_FAILED;
     }
-#endif
 
     return loading_result;
 }
