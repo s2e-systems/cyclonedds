@@ -30,17 +30,6 @@ extern "C" {
 #endif
 
 struct ddsrt_stat {
-/* The mode_t macro's (like OS_ISDIR) are defined in the platform specific header files! */
-/* NEVER name these fields identical to the POSIX standard! Since e.g. the Linux implementation
-   has defined it as follows:
-   struct stat {
-     ...
-       struct timespec st_mtim;
-   #define st_mtime st_mtim.tvsec
-     ...
-   };
-   This results in the fact that our definition is also changed, causing compilation errors!
-*/
   ddsrt_mode_t stat_mode;
   size_t stat_size;
   dds_time_t  stat_mtime;
@@ -59,8 +48,8 @@ struct ddsrt_dirent {
  *   none
  *
  * Possible results:
- * - return os_resultSuccess if directory 'name' is opened
- * - os_resultFail if the filre 'name' could not
+ * - return DDS_RETCODE_OK if directory 'name' is opened
+ * - DDS_RETCODE_ERROR if 'name' could not
  *     be found or is not a directory.
  */
 DDS_EXPORT dds_return_t ddsrt_opendir(const char *name, ddsrt_dirHandle *dir);
@@ -73,9 +62,9 @@ DDS_EXPORT dds_return_t ddsrt_opendir(const char *name, ddsrt_dirHandle *dir);
  *   none
  *
  * Possible results:
- * - return os_resultSuccess if directory identified by the handle
+ * - return DDS_RETCODE_OK if directory identified by the handle
  *     is succesfully closed
- * - return os_resultFail if the handle is invalid.
+ * - return DDS_RETCODE_ERROR if the handle is invalid.
  */
 DDS_EXPORT dds_return_t ddsrt_closedir(ddsrt_dirHandle d);
 
@@ -87,11 +76,22 @@ DDS_EXPORT dds_return_t ddsrt_closedir(ddsrt_dirHandle d);
  *   none
  *
  * Possible results:
- * - return os_resultSuccess if next directory is found
- * - return os_resultFail if no more directories are found.
+ * - return DDS_RETCODE_OK if next directory is found
+ * - return DDS_RETCODE_ERROR if no more directories are found.
  */
 DDS_EXPORT dds_return_t ddsrt_readdir(ddsrt_dirHandle d, struct ddsrt_dirent *direntp);
 
+/** \brief stat wrapper
+ *
+ * Gets directory status conform stat.
+ *
+ * Precondition:
+ *   none
+ *
+ * Possible results:
+ * - return DDS_RETCODE_OK if stat is successful
+ * - return DDS_RETCODE_ERROR if stat fails.
+ */
 DDS_EXPORT dds_return_t ddsrt_stat(const char *path, struct ddsrt_stat *buf);
 
 /** \brief Transforms the given filepath into a platform specific filepath.
@@ -106,14 +106,14 @@ DDS_EXPORT dds_return_t ddsrt_stat(const char *path, struct ddsrt_stat *buf);
  * - returns normalized filepath conform current platform
  * - return NULL if out of memory.
  */
-DDS_EXPORT char * ddsrt_fileNormalize(const char *filepath);
+DDS_EXPORT char* ddsrt_fileNormalize(const char *filepath);
 
 /** \brief Get file seperator
  *
  * Possible Results:
  * - "<file-seperator-character>"
  */
-DDS_EXPORT const char *ddsrt_fileSep(void);
+DDS_EXPORT const char* ddsrt_fileSep(void);
 
 #if defined (__cplusplus)
 }
