@@ -17,7 +17,7 @@
 #include "dds/ddsrt/heap.h"
 #include "dds/ddsrt/io.h"
 
-dds_return_t ddsrt_opendir(const char *name, ddsrt_dirHandle *dir)
+dds_return_t ddsrt_opendir(const char *name, ddsrt_dir_handle_t *dir)
 {
     dds_return_t result;
 
@@ -31,7 +31,7 @@ dds_return_t ddsrt_opendir(const char *name, ddsrt_dirHandle *dir)
         hList = FindFirstFile(szDir, &FileData);
 
         if (hList != INVALID_HANDLE_VALUE) {
-            *dir = (ddsrt_dirHandle)hList;
+            *dir = hList;
             result = DDS_RETCODE_OK;
         }
     }
@@ -39,14 +39,14 @@ dds_return_t ddsrt_opendir(const char *name, ddsrt_dirHandle *dir)
     return result;
 }
 
-dds_return_t ddsrt_readdir(ddsrt_dirHandle d, struct ddsrt_dirent *direntp)
+dds_return_t ddsrt_readdir(ddsrt_dir_handle_t d, struct ddsrt_dirent *direntp)
 {
     dds_return_t result;
     WIN32_FIND_DATA FileData;
     BOOL r;
 
     if (direntp) {
-        r = FindNextFile((HANDLE)d, &FileData);
+        r = FindNextFile(d, &FileData);
         if (r) {
             ddsrt_strlcpy(direntp->d_name, FileData.cFileName, sizeof(direntp->d_name));
             result = DDS_RETCODE_OK;
@@ -60,9 +60,9 @@ dds_return_t ddsrt_readdir(ddsrt_dirHandle d, struct ddsrt_dirent *direntp)
     return result;
 }
 
-dds_return_t ddsrt_closedir(ddsrt_dirHandle d)
+dds_return_t ddsrt_closedir(ddsrt_dir_handle_t d)
 {
-    FindClose((HANDLE)d);
+    FindClose(d);
 
     return DDS_RETCODE_OK;
 }
@@ -86,7 +86,7 @@ dds_return_t ddsrt_stat(const char *path, struct ddsrt_stat *buf)
     return result;
 }
 
-char * ddsrt_fileNormalize(const char *filepath)
+char * ddsrt_file_normalize(const char *filepath)
 {
     char *norm;
     const char *fpPtr;
@@ -95,7 +95,7 @@ char * ddsrt_fileNormalize(const char *filepath)
     norm = NULL;
     if ((filepath != NULL) && (*filepath != '\0')) {
         norm = ddsrt_malloc(strlen(filepath) + 1);
-        /* replace any / or \ by OS_FILESEPCHAR */
+        /* replace any / or \ by DDSRT_FILESEPCHAR */
         fpPtr = (char *) filepath;
         normPtr = norm;
         while (*fpPtr != '\0') {
@@ -116,7 +116,7 @@ char * ddsrt_fileNormalize(const char *filepath)
     return norm;
 }
 
-const char *ddsrt_fileSep(void)
+const char *ddsrt_file_sep(void)
 {
     return "\\";
 }

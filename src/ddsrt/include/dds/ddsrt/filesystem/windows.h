@@ -17,7 +17,7 @@
 
 #include "dds/ddsrt/types.h"
 
-typedef HANDLE ddsrt_dirHandle;
+typedef HANDLE ddsrt_dir_handle_t;
 typedef unsigned short ddsrt_mode_t;
 
 #define DDSRT_PATH_MAX MAX_PATH

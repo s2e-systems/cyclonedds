@@ -17,7 +17,7 @@
 #include <dirent.h>
 #include <limits.h>
 
-typedef DIR *ddsrt_dirHandle;
+typedef DIR *ddsrt_dir_handle_t;
 typedef mode_t ddsrt_mode_t;
 
 #define DDSRT_PATH_MAX PATH_MAX

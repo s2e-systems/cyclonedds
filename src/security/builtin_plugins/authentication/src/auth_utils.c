@@ -49,10 +49,10 @@
 #include "dds/ddsrt/heap.h"
 #include "dds/ddsrt/atomics.h"
 #include "dds/ddsrt/string.h"
+#include "dds/ddsrt/io.h"
 #include "dds/security/core/dds_security_utils.h"
 #include <string.h>
 #include "auth_utils.h"
-
 
 #define MAX_TRUSTED_CA 100
 
@@ -1194,33 +1194,27 @@ get_trusted_ca_list ( const char* trusted_ca_dir,
     DDS_Security_ValidationResult_t loading_result = DDS_RETCODE_OK;
 
     dds_return_t        r;
-    ddsrt_dirHandle     d_descr;
+    ddsrt_dir_handle_t     d_descr;
     struct ddsrt_dirent d_entry;
     struct ddsrt_stat status;
     char *full_file_path;
     char *trusted_ca_dir_normalized;
-    size_t full_file_path_size;
 
     X509 *ca_buffer_array[MAX_TRUSTED_CA]; /*max trusted CA size */
     unsigned ca_buffer_array_size=0;
     unsigned i;
-    trusted_ca_dir_normalized  = ddsrt_fileNormalize(trusted_ca_dir);
+    trusted_ca_dir_normalized  = ddsrt_file_normalize(trusted_ca_dir);
 
     r = ddsrt_opendir(trusted_ca_dir_normalized, &d_descr);
     ddsrt_free ( trusted_ca_dir_normalized );
     if (r == DDS_RETCODE_OK && ca_buffer_array_size < MAX_TRUSTED_CA) { /* accessable */
         r = ddsrt_readdir(d_descr, &d_entry);
         while (r == DDS_RETCODE_OK) {
-            full_file_path_size = strlen(trusted_ca_dir) + strlen(ddsrt_fileSep()) + strlen(d_entry.d_name) + strlen(ddsrt_fileSep()) + 1 ;
-            full_file_path = (char*) ddsrt_malloc(full_file_path_size);
-            ddsrt_strlcpy(full_file_path, trusted_ca_dir, full_file_path_size);
-            ddsrt_strlcat(full_file_path, ddsrt_fileSep(), full_file_path_size);
-            ddsrt_strlcat(full_file_path, d_entry.d_name, full_file_path_size);
-
+            ddsrt_asprintf(&full_file_path, "%s%s%s", trusted_ca_dir, ddsrt_file_sep(), d_entry.d_name);
             if (ddsrt_stat (full_file_path, &status) == DDS_RETCODE_OK) { /* accessable */
                 if ((strcmp(d_entry.d_name, ".") != 0) &&
                     (strcmp(d_entry.d_name, "..") != 0)) {
-                    char * filename = ddsrt_fileNormalize(full_file_path);
+                    char * filename = ddsrt_file_normalize(full_file_path);
 
                     if(filename){
                         X509 *identityCA;

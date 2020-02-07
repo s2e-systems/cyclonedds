@@ -52,7 +52,7 @@ struct ddsrt_dirent {
  * - DDS_RETCODE_ERROR if 'name' could not
  *     be found or is not a directory.
  */
-DDS_EXPORT dds_return_t ddsrt_opendir(const char *name, ddsrt_dirHandle *dir);
+DDS_EXPORT dds_return_t ddsrt_opendir(const char *name, ddsrt_dir_handle_t *dir);
 
 /** \brief closedir wrapper
  *
@@ -66,7 +66,7 @@ DDS_EXPORT dds_return_t ddsrt_opendir(const char *name, ddsrt_dirHandle *dir);
  *     is succesfully closed
  * - return DDS_RETCODE_ERROR if the handle is invalid.
  */
-DDS_EXPORT dds_return_t ddsrt_closedir(ddsrt_dirHandle d);
+DDS_EXPORT dds_return_t ddsrt_closedir(ddsrt_dir_handle_t d);
 
 /** \brief readdir wrapper
  *
@@ -79,7 +79,7 @@ DDS_EXPORT dds_return_t ddsrt_closedir(ddsrt_dirHandle d);
  * - return DDS_RETCODE_OK if next directory is found
  * - return DDS_RETCODE_ERROR if no more directories are found.
  */
-DDS_EXPORT dds_return_t ddsrt_readdir(ddsrt_dirHandle d, struct ddsrt_dirent *direntp);
+DDS_EXPORT dds_return_t ddsrt_readdir(ddsrt_dir_handle_t d, struct ddsrt_dirent *direntp);
 
 /** \brief stat wrapper
  *
@@ -97,7 +97,8 @@ DDS_EXPORT dds_return_t ddsrt_stat(const char *path, struct ddsrt_stat *buf);
 /** \brief Transforms the given filepath into a platform specific filepath.
  *
  * This translation function will replace any platform file seperator into
- * the fileseperator of the current platform.
+ * the fileseperator of the current platform. Doulbe quotes are removed
+ * as well.
  *
  * Precondition:
  *   none
@@ -106,14 +107,14 @@ DDS_EXPORT dds_return_t ddsrt_stat(const char *path, struct ddsrt_stat *buf);
  * - returns normalized filepath conform current platform
  * - return NULL if out of memory.
  */
-DDS_EXPORT char* ddsrt_fileNormalize(const char *filepath);
+DDS_EXPORT char* ddsrt_file_normalize(const char *filepath);
 
 /** \brief Get file seperator
  *
  * Possible Results:
- * - "<file-seperator-character>"
+ * - "<file-seperator-string>"
  */
-DDS_EXPORT const char* ddsrt_fileSep(void);
+DDS_EXPORT const char* ddsrt_file_sep(void);
 
 #if defined (__cplusplus)
 }
