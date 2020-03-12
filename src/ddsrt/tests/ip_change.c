@@ -1,5 +1,13 @@
 #include "dds/ddsrt/ip_change.h"
 
+#include <sys/ioctl.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <stdio.h>
+
 #include "dds/ddsrt/cdtors.h"
 #include "dds/ddsrt/ifaddrs.h"
 
@@ -13,8 +21,10 @@
 #define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
 #define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
 
-static void printIPAddress(void)
+static void printIPAddress(void* vdata)
 {
+  int* data = (int*)vdata;
+  *data = 1;
     // The following code is from the ifaddr tests,
     // It does crash though if the address of the interface
     // is changed. This is because there is a short moment
@@ -106,6 +116,62 @@ static void printIPAddress(void)
 }
 
 
+static void checkIoctlError(int e, int i)
+{
+  if (e == -1)
+  {
+    printf("At %d:", i);
+    char* str = malloc(256);
+    switch (errno)
+    {
+    case EBADF:
+      str = "fd is not a valid file descriptor";
+      break;
+    case EFAULT:
+      str = "argp references an inaccessible memory area.";
+      break;
+    case EINVAL:
+      str = "request or argp is not valid.";
+      break;
+    case ENOTTY:
+      str = "fd is not associated with a character special device. \
+            The specified request does not apply to the kind of \
+            object that the file descriptor fd references.";
+      break;
+     default:
+      str = strerror(errno);
+    }
+    printf("ioctl error: %s\n", str);
+  }
+}
+
+
+static void change_address(const char *ip)
+{
+  struct ifreq ifr;
+  const char * name = "eth0";
+  int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+
+  strncpy(ifr.ifr_name, name, IFNAMSIZ);
+
+  ifr.ifr_addr.sa_family = AF_INET;
+  struct sockaddr_in* addr = (struct sockaddr_in*)&ifr.ifr_addr;
+  int r1 = inet_pton(AF_INET, ip, &addr->sin_addr);
+  if (r1 != 1)
+  {
+    exit(-1);
+  }
+  int r2 = ioctl(fd, SIOCSIFADDR, &ifr);
+  checkIoctlError(r2, 2);
+
+
+  struct sockaddr_in* addr_nm = (struct sockaddr_in*)&ifr.ifr_addr;
+  inet_pton(AF_INET, "255.255.0.0", &addr_nm->sin_addr);
+  int r3 = ioctl(fd, SIOCSIFNETMASK, &ifr);
+  checkIoctlError(r3, 3);
+}
+
+
 CU_Init(ddsrt_dhcp)
 {
     ddsrt_init();
@@ -121,11 +187,22 @@ CU_Clean(ddsrt_dhcp)
 
 CU_Test(ddsrt_ip_change_notify, ipv4)
 {
-    struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&printIPAddress, NULL);
+  int expected = 1;
+  int result = 0;
+    const char *ip_before = "10.12.0.1";
+    change_address(ip_before);
 
+    usleep(2000000);
 
+    struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&printIPAddress, &result);
+    usleep(1000000);
+    const char *ip_after = "10.12.0.2";
+    change_address(ip_after);
 
+    usleep(1000000);
     ddsrt_ip_change_notify_free(icnd);
+
+    CU_ASSERT_EQUAL(expected, result);
 
 }
 
