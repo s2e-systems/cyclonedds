@@ -3,7 +3,7 @@
 
 #include "dds/export.h"
 
-typedef void (*dds_ip_change_notify_callback)(void);
+typedef void (*dds_ip_change_notify_callback)(void* );
 
 struct ddsrt_ip_change_notify_data;
 
