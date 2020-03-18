@@ -242,7 +242,7 @@ copyaddr(
         }
       }
 
-      assert(i < addrtable->dwNumEntries);
+      //assert(i < addrtable->dwNumEntries);
 
       if ((ifa->netmask = ddsrt_memdup(&nm, sz)) == NULL ||
           (ifa->broadaddr = ddsrt_memdup(&bc, sz)) == NULL)
