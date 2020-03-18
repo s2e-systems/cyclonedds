@@ -122,17 +122,17 @@ CU_Test(ddsrt_ip_change_notify, ipv4)
 
   printIPAddress();
 
-  int expected = 1;
+  const int expected = 1;
   int result = 0;
 
-  usleep(20000);
+//  usleep(20000);
 
   struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, &result);
-  usleep(10000);
+//  usleep(10000);
   const char *ip_after = "10.12.0.2";
   change_address(ip_after);
 
-  usleep(10000);
+//  usleep(10000);
   ddsrt_ip_change_notify_free(icnd);
 
   delete_if();
