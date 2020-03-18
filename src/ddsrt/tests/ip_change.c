@@ -1,20 +1,46 @@
 #include "dds/ddsrt/ip_change.h"
 
-#include <sys/ioctl.h>
-#include <arpa/inet.h>
-#include <net/if.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
-#include <ifaddrs.h>
+
+#ifndef _WIN32
+    #include <sys/ioctl.h>
+    #include <arpa/inet.h>
+    #include <net/if.h>
+    #include <ifaddrs.h>
+#endif
 
 #include "dds/ddsrt/cdtors.h"
 #include "dds/ddsrt/ifaddrs.h"
 #include "dds/ddsrt/string.h"
 #include "dds/ddsrt/heap.h"
+#include "dds/ddsrt/time.h"
 
 #include "CUnit/Test.h"
+
+char *get_ip_str(const struct sockaddr *sa, char *s, size_t maxlen)
+{
+    switch(sa->sa_family) {
+        case AF_INET:
+            inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr),
+                    s, maxlen);
+            break;
+
+        case AF_INET6:
+            inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr),
+                    s, maxlen);
+            break;
+
+        default:
+            ddsrt_strlcpy(s, "Unknown AF", maxlen);
+            return NULL;
+    }
+
+    return s;
+}
 
 static void printIPAddress()
 {
@@ -26,7 +52,9 @@ static void printIPAddress()
   {
     for (ifa = ifa_root; ifa; ifa = ifa->next)
     {
-      printf("if: %s\n", ifa->name);
+        char ip_addr[AF_MAX];
+        get_ip_str(ifa->addr, (char*)&ip_addr, AF_MAX);
+      printf("if: %s (%s)\n", ifa->name, ip_addr);
     }
   }
   ddsrt_freeifaddrs(ifa_root);
@@ -39,7 +67,7 @@ static void callback(void* vdata)
   *data = 1;
 }
 
-
+#ifndef _WIN32
 static void checkIoctlError(int e, int i)
 {
   if (e == -1)
@@ -98,7 +126,22 @@ static void delete_if()
 {
   system("sudo ip link delete eth11");
 }
+#else
 
+static void create_if()
+{
+}
+
+static void delete_if()
+{
+}
+
+static void change_address(const char *ip)
+{
+    DDSRT_UNUSED_ARG(ip);
+}
+
+#endif
 
 CU_Init(ddsrt_dhcp)
 {
@@ -125,14 +168,12 @@ CU_Test(ddsrt_ip_change_notify, ipv4)
   const int expected = 1;
   int result = 0;
 
-//  usleep(20000);
-
   struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, &result);
-//  usleep(10000);
+
   const char *ip_after = "10.12.0.2";
   change_address(ip_after);
 
-//  usleep(10000);
+  dds_sleepfor(10000000000);
   ddsrt_ip_change_notify_free(icnd);
 
   delete_if();
