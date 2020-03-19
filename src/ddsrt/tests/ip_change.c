@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
+#include <signal.h>
 
 #ifndef _WIN32
     #include <sys/ioctl.h>
@@ -21,7 +22,9 @@
 
 #include "CUnit/Test.h"
 
-char *get_ip_str(const struct sockaddr *sa, char *s, size_t maxlen)
+static volatile sig_atomic_t gtermflag = 0;
+
+static char *get_ip_str(const struct sockaddr *sa, char *s, socklen_t maxlen)
 {
     switch(sa->sa_family) {
         case AF_INET:
@@ -65,6 +68,7 @@ static void callback(void* vdata)
   printIPAddress();
   int* data = (int*)vdata;
   *data = 1;
+  gtermflag = 1;
 }
 
 #ifndef _WIN32
@@ -173,7 +177,10 @@ CU_Test(ddsrt_ip_change_notify, ipv4)
   const char *ip_after = "10.12.0.2";
   change_address(ip_after);
 
-  dds_sleepfor(10000000000);
+  while(!gtermflag)
+  {
+    dds_sleepfor(10);
+  }
   ddsrt_ip_change_notify_free(icnd);
 
   delete_if();
