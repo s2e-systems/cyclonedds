@@ -143,6 +143,8 @@ jobs:
   include:
     - <<: *linux_gcc8
       env: [ ARCH=x86_64, ASAN=none, BUILD_TYPE=Debug, SSL=NO, LIFESPAN=NO, DEADLINE=NO, GENERATOR="Unix Makefiles" ]
+    - <<: *windows_vs2017
+      env: [ ARCH=x86_64, ASAN=none, BUILD_TYPE=Debug, SSL=NO, GENERATOR="Visual Studio 15 2017 Win64" ]
 
 before_script:
   - conan profile new default --detect
