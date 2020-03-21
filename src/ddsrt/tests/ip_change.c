@@ -7,13 +7,6 @@
 #include <stdio.h>
 #include <signal.h>
 
-#ifndef _WIN32
-    #include <sys/ioctl.h>
-    #include <arpa/inet.h>
-    #include <net/if.h>
-    #include <ifaddrs.h>
-#endif
-
 #include "dds/ddsrt/cdtors.h"
 #include "dds/ddsrt/ifaddrs.h"
 #include "dds/ddsrt/string.h"
@@ -21,6 +14,43 @@
 #include "dds/ddsrt/time.h"
 
 #include "CUnit/Test.h"
+
+#ifndef _WIN32
+#include <sys/ioctl.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <ifaddrs.h>
+#else
+#include <windows.h>
+#include <tchar.h>
+#include <setupapi.h>
+#include <regstr.h>
+#include <infstr.h>
+#include <cfgmgr32.h>
+#include <malloc.h>
+#include <newdev.h>
+#include <objbase.h>
+#include <strsafe.h>
+#include <io.h>
+#include <fcntl.h>
+
+typedef BOOL(WINAPI* UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndParent,
+    _In_ LPCTSTR HardwareId,
+    _In_ LPCTSTR FullInfPath,
+    _In_ DWORD InstallFlags,
+    _Out_opt_ PBOOL bRebootRequired
+    );
+
+#ifdef _UNICODE
+#define UPDATEDRIVERFORPLUGANDPLAYDEVICES "UpdateDriverForPlugAndPlayDevicesW"
+#define SETUPUNINSTALLOEMINF "SetupUninstallOEMInfW"
+#else
+#define UPDATEDRIVERFORPLUGANDPLAYDEVICES "UpdateDriverForPlugAndPlayDevicesA"
+#define SETUPUNINSTALLOEMINF "SetupUninstallOEMInfA"
+#endif
+#define SETUPSETNONINTERACTIVEMODE "SetupSetNonInteractiveMode"
+#define SETUPVERIFYINFFILE "SetupVerifyInfFile"
+#endif
 
 static volatile sig_atomic_t gtermflag = 0;
 
@@ -132,12 +162,150 @@ static void delete_if()
 }
 #else
 
-static void create_if()
+HDEVINFO DeviceInfoSet = INVALID_HANDLE_VALUE;
+SP_DEVINFO_DATA DeviceInfoData;
+
+static int create_if()
 {
+    
+    TCHAR InfPath[MAX_PATH];
+    LPCSTR inf = "C:\\Windows\\inf\\netloop.inf\0";
+    LPCTSTR hwid = "*msloop";
+    GUID ClassGUID;
+    TCHAR ClassName[MAX_CLASS_NAME_LEN];
+    
+    TCHAR hwIdList[LINE_LEN + 4];
+
+    HMODULE newdevMod = NULL;
+    UpdateDriverForPlugAndPlayDevicesProto UpdateFn;
+    DWORD flags = 0;
+    BOOL reboot = FALSE;
+
+    //
+    // Inf must be a full pathname
+    //
+    if (GetFullPathName(inf, MAX_PATH, InfPath, NULL) >= MAX_PATH) {
+        //
+        // inf pathname too long
+        //
+        printf("Pathname too long");
+        return -1;
+    }
+
+    //
+    // List of hardware ID's must be double zero-terminated
+    //
+    ZeroMemory(hwIdList, sizeof(hwIdList));
+    if (FAILED(StringCchCopy(hwIdList, LINE_LEN, hwid))) {
+        goto final;
+    }
+
+    if (!SetupDiGetINFClass(InfPath, &ClassGUID, ClassName, sizeof(ClassName) / sizeof(ClassName[0]), 0))
+    {
+        printf("Error getting INF class");
+        return -1;
+    }
+
+    DeviceInfoSet = SetupDiCreateDeviceInfoList(&ClassGUID, 0);
+    if (DeviceInfoSet == INVALID_HANDLE_VALUE)
+    {
+        goto final;
+    }
+
+    //
+    // Now create the element.
+    // Use the Class GUID and Name from the INF file.
+    //
+    DeviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+    if (!SetupDiCreateDeviceInfo(DeviceInfoSet,
+        ClassName,
+        &ClassGUID,
+        NULL,
+        0,
+        DICD_GENERATE_ID,
+        &DeviceInfoData))
+    {
+        DWORD error = GetLastError();
+        printf("Error: %u", error);
+        goto final;
+    }
+
+    //
+    // Add the HardwareID to the Device's HardwareID property.
+    //
+    if (!SetupDiSetDeviceRegistryProperty(DeviceInfoSet,
+        &DeviceInfoData,
+        SPDRP_HARDWAREID,
+        (LPBYTE)hwIdList,
+        ((DWORD)_tcslen(hwIdList) + 1 + 1) * sizeof(TCHAR)))
+    {
+        printf("Failed to add hwid\n");
+        goto final;
+    }
+
+    //
+   // Transform the registry element into an actual devnode
+   // in the PnP HW tree.
+   //
+    if (!SetupDiCallClassInstaller(DIF_REGISTERDEVICE,
+        DeviceInfoSet,
+        &DeviceInfoData))
+    {
+        printf("Failed SetupDiCallClassInstaller\n");
+        DWORD error = GetLastError();
+        printf("Error: %u\n", error);
+        goto final;
+    }
+
+    //
+    // make use of UpdateDriverForPlugAndPlayDevices
+    //
+    newdevMod = LoadLibrary(TEXT("newdev.dll"));
+    if (!newdevMod) {
+        goto final;
+    }
+    UpdateFn = (UpdateDriverForPlugAndPlayDevicesProto)GetProcAddress(newdevMod, UPDATEDRIVERFORPLUGANDPLAYDEVICES);
+    if (!UpdateFn)
+    {
+        goto final;
+    }
+
+    //FormatToStream(stdout, inf ? MSG_UPDATE_INF : MSG_UPDATE, hwid, inf);
+
+    if (!UpdateFn(NULL, hwid, inf, flags, &reboot)) {
+        goto final;
+    }
+
+    return 1;
+
+    final:
+
+    //printf("Error: %s", GetLastError());
+    if (DeviceInfoSet != INVALID_HANDLE_VALUE) {
+        SetupDiDestroyDeviceInfoList(DeviceInfoSet);
+    }
+
+    return -1;
 }
 
 static void delete_if()
 {
+    SP_REMOVEDEVICE_PARAMS rmdParams;
+    LPCTSTR action = NULL;
+    
+    rmdParams.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
+    rmdParams.ClassInstallHeader.InstallFunction = DIF_REMOVE;
+    rmdParams.Scope = DI_REMOVEDEVICE_GLOBAL;
+    rmdParams.HwProfile = 0;
+    if (!SetupDiSetClassInstallParams(DeviceInfoSet, &DeviceInfoData, &rmdParams.ClassInstallHeader, sizeof(rmdParams)) ||
+        !SetupDiCallClassInstaller(DIF_REMOVE, DeviceInfoSet, &DeviceInfoData)) {
+        //
+        // failed to invoke DIF_REMOVE
+        //
+        printf("Error removing");
+    }
+
+
 }
 
 static void change_address(const char *ip)
@@ -163,6 +331,8 @@ CU_Clean(ddsrt_dhcp)
 CU_Test(ddsrt_ip_change_notify, ipv4)
 {
   create_if();
+
+  dds_sleepfor(10000000000);
 
   const char *ip_before = "10.12.0.1";
   change_address(ip_before);
