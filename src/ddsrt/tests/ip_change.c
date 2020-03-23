@@ -53,6 +53,13 @@ typedef BOOL(WINAPI* UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndP
 #endif
 
 static volatile sig_atomic_t gtermflag = 0;
+struct if_info {
+#ifndef _WIN32
+#else
+	HDEVINFO DeviceInfoSet;
+	SP_DEVINFO_DATA DeviceInfoData;
+#endif
+};
 
 static char* get_ip_str(const struct sockaddr* sa, char* s, socklen_t maxlen)
 {
@@ -95,7 +102,7 @@ static void printIPAddress()
 
 static void callback(void* vdata)
 {
-	printIPAddress();
+	//printIPAddress();
 	int* data = (int*)vdata;
 	*data = 1;
 	gtermflag = 1;
@@ -206,10 +213,7 @@ void interface_change_cb(IN PVOID CallerContext, IN PMIB_IPINTERFACE_ROW Row OPT
 
 }
 
-static HDEVINFO DeviceInfoSet = INVALID_HANDLE_VALUE;
-static SP_DEVINFO_DATA DeviceInfoData;
-
-static int create_if(char* if_name)
+static int create_if(char* if_name, struct if_info* info)
 {
 #ifndef _WIN32
 	system("sudo ip link add eth11 type dummy");
@@ -253,8 +257,8 @@ static int create_if(char* if_name)
 	}
 
 	// Create the DeviceInfoList
-	DeviceInfoSet = SetupDiCreateDeviceInfoList(&ClassGUID, 0);
-	if (DeviceInfoSet == INVALID_HANDLE_VALUE)
+	info->DeviceInfoSet = SetupDiCreateDeviceInfoList(&ClassGUID, 0);
+	if (info->DeviceInfoSet == INVALID_HANDLE_VALUE)
 	{
 		goto final;
 	}
@@ -263,14 +267,14 @@ static int create_if(char* if_name)
 	// Now create the element.
 	// Use the Class GUID and Name from the INF file.
 	//
-	DeviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
-	if (!SetupDiCreateDeviceInfo(DeviceInfoSet,
+	info->DeviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+	if (!SetupDiCreateDeviceInfo(info->DeviceInfoSet,
 		ClassName,
 		&ClassGUID,
 		NULL,
 		0,
 		DICD_GENERATE_ID,
-		&DeviceInfoData))
+		&info->DeviceInfoData))
 	{
 		DWORD error = GetLastError();
 		printf("Error: %u", error);
@@ -280,8 +284,8 @@ static int create_if(char* if_name)
 	//
 	// Add the HardwareID to the Device's HardwareID property.
 	//
-	if (!SetupDiSetDeviceRegistryProperty(DeviceInfoSet,
-		&DeviceInfoData,
+	if (!SetupDiSetDeviceRegistryProperty(info->DeviceInfoSet,
+		&info->DeviceInfoData,
 		SPDRP_HARDWAREID,
 		(LPBYTE)hwIdList,
 		((DWORD)_tcslen(hwIdList) + 1 + 1) * sizeof(TCHAR)))
@@ -295,8 +299,8 @@ static int create_if(char* if_name)
    // in the PnP HW tree.
    //
 	if (!SetupDiCallClassInstaller(DIF_REGISTERDEVICE,
-		DeviceInfoSet,
-		&DeviceInfoData))
+		info->DeviceInfoSet,
+		&info->DeviceInfoData))
 	{
 		printf("Failed SetupDiCallClassInstaller\n");
 		DWORD error = GetLastError();
@@ -346,15 +350,15 @@ static int create_if(char* if_name)
 	final:
 
 	//printf("Error: %s", GetLastError());
-	if (DeviceInfoSet != INVALID_HANDLE_VALUE) {
-		SetupDiDestroyDeviceInfoList(DeviceInfoSet);
+	if (info->DeviceInfoSet != INVALID_HANDLE_VALUE) {
+		SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
 	}
 
 	return -1;
 #endif
 }
 
-static void delete_if()
+static void delete_if(struct if_info* info)
 {
 #ifndef _WIN32
 	system("sudo ip link delete eth11");
@@ -366,8 +370,8 @@ static void delete_if()
 	rmdParams.ClassInstallHeader.InstallFunction = DIF_REMOVE;
 	rmdParams.Scope = DI_REMOVEDEVICE_GLOBAL;
 	rmdParams.HwProfile = 0;
-	if (!SetupDiSetClassInstallParams(DeviceInfoSet, &DeviceInfoData, &rmdParams.ClassInstallHeader, sizeof(rmdParams)) ||
-		!SetupDiCallClassInstaller(DIF_REMOVE, DeviceInfoSet, &DeviceInfoData)) {
+	if (!SetupDiSetClassInstallParams(info->DeviceInfoSet, &info->DeviceInfoData, &rmdParams.ClassInstallHeader, sizeof(rmdParams)) ||
+		!SetupDiCallClassInstaller(DIF_REMOVE, info->DeviceInfoSet, &info->DeviceInfoData)) {
 		//
 		// failed to invoke DIF_REMOVE
 		//
@@ -390,33 +394,55 @@ CU_Clean(ddsrt_dhcp)
 
 CU_Test(ddsrt_ip_change_notify, ipv4)
 {
-	char if_name[256];
-
-	create_if(if_name);
-
-	printIPAddress();
-
-	const char* ip_before = "10.12.0.1";
-	change_address(if_name, ip_before);
-
-	printIPAddress();
-
 	const int expected = 1;
-	int result = 0;
 
-	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name, &result);
-
+	char if_name[256];
+	const char* ip_before = "10.12.0.1";
 	const char* ip_after = "10.12.0.2";
-	change_address(if_name, ip_after);
+	int result = 0;
+	struct if_info info;
 
+	create_if(if_name, &info);
+	change_address(if_name, ip_before);
+	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name, &result);
+	change_address(if_name, ip_after);
 	while (!gtermflag)
 	{
 		dds_sleepfor(10);
 	}
 	ddsrt_ip_change_notify_free(icnd);
+	delete_if(&info);
 
-	delete_if();
+	CU_ASSERT_EQUAL(expected, result);
+}
 
-	//CU_ASSERT_EQUAL(expected, result);
+CU_Test(ddsrt_ip_change_notify_correct_interface, ipv4)
+{
+	const int expected = 1;
+
+	char if_name_one[256];
+	char if_name_two[256];
+	struct if_info info_one;
+	struct if_info info_two;
+	const char* ip_if_two = "10.13.0.1";
+	const char* ip_before = "10.12.0.1";
+	const char* ip_after = "10.12.0.2";
+	int result = 0;
+
+	create_if(if_name_one, &info_one);
+	create_if(if_name_two, &info_two);
+	change_address(if_name_one, ip_before);
+	change_address(if_name_two, ip_if_two);
+	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name_one, &result);
+	change_address(if_name_one, ip_after);
+
+	dds_sleepfor(1000000000);
+
+	CU_ASSERT_NOT_EQUAL(expected, result);
+
+	ddsrt_ip_change_notify_free(icnd);
+	delete_if(&info_one);
+	delete_if(&info_two);
+
 }
 
