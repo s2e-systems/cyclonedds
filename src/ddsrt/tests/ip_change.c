@@ -163,9 +163,12 @@ static void change_address(const char* if_name, const char* ip)
 	mbstowcs_s(&num_char, IfNameW, 256, if_name, 256);
 	ConvertInterfaceAliasToLuid(IfNameW, &IfLuid);
 	ConvertInterfaceLuidToIndex(&IfLuid, &IfIndex);
-	IPAddr ip_addr = inet_addr(ip);
-	IPAddr netmask = inet_addr("255.255.0.0");
-	ret = AddIPAddress(ip_addr /*Address*/, netmask /*IpMask*/, IfIndex, &NTEContext, &NTEInstance);
+
+	struct sockaddr_in ip_addr;
+	struct sockaddr_in netmask_addr;
+	ddsrt_sockaddrfromstr(AF_INET, ip, &ip_addr);
+	ddsrt_sockaddrfromstr(AF_INET, "255.255.0.0", &netmask_addr);
+	ret = AddIPAddress(ip_addr.sin_addr.S_un.S_addr /*Address*/, netmask_addr.sin_addr.S_un.S_addr /*IpMask*/, IfIndex, &NTEContext, &NTEInstance);
 	if (ret != NO_ERROR)
 	{
 		printf("Error adding ip address %d\n", ret);
