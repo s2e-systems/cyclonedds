@@ -455,3 +455,17 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
 	ddsrt_ip_change_notify_free(icnd);
 }
 
+CU_Test(ddsrt_ip_change_notify, no_changes)
+{
+	const int expected = 0;
+	int result = 0;
+
+	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name_two, &result);
+
+	// Wait for one second and afterwards check no changes were triggered and that the test finalizes (i.e doesn't get blocked on the free)
+	dds_sleepfor(100000000);
+
+	CU_ASSERT_EQUAL(expected, result);
+
+	ddsrt_ip_change_notify_free(icnd);
+}
