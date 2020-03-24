@@ -103,6 +103,7 @@ static void printIPAddress()
 static void callback(void* vdata)
 {
 	//printIPAddress();
+	printf("IP  Change triggered\n");
 	int* data = (int*)vdata;
 	*data = 1;
 	gtermflag = 1;
@@ -392,7 +393,7 @@ CU_Clean(ddsrt_dhcp)
 	return 0;
 }
 
-CU_Test(ddsrt_ip_change_notify, ipv4)
+CU_Test(ddsrt_ip_change_notify, ipv4_single_interface)
 {
 	const int expected = 1;
 
@@ -416,7 +417,7 @@ CU_Test(ddsrt_ip_change_notify, ipv4)
 	CU_ASSERT_EQUAL(expected, result);
 }
 
-CU_Test(ddsrt_ip_change_notify_correct_interface, ipv4)
+CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
 {
 	const int expected = 1;
 
@@ -433,12 +434,49 @@ CU_Test(ddsrt_ip_change_notify_correct_interface, ipv4)
 	create_if(if_name_two, &info_two);
 	change_address(if_name_one, ip_before);
 	change_address(if_name_two, ip_if_two);
+
+	printf("Going to monitor interface %s\n", if_name_one);
 	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name_one, &result);
 	change_address(if_name_one, ip_after);
+	while (!gtermflag)
+	{
+		dds_sleepfor(10);
+	}
 
-	dds_sleepfor(1000000000);
 
-	CU_ASSERT_NOT_EQUAL(expected, result);
+	CU_ASSERT_EQUAL(expected, result);
+
+	ddsrt_ip_change_notify_free(icnd);
+	delete_if(&info_one);
+	delete_if(&info_two);
+}
+
+CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
+{
+	const int expected = 0;
+
+	char if_name_one[256];
+	char if_name_two[256];
+	struct if_info info_one;
+	struct if_info info_two;
+	const char* ip_if_two = "10.13.0.1";
+	const char* ip_before = "10.12.0.1";
+	const char* ip_after = "10.12.0.2";
+	int result = 0;
+
+	create_if(if_name_one, &info_one);
+	create_if(if_name_two, &info_two);
+	change_address(if_name_one, ip_before);
+	change_address(if_name_two, ip_if_two);
+
+	printf("Going to monitor interface %s\n", if_name_two);
+	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name_two, &result);
+	change_address(if_name_one, ip_after);
+
+	// Wait for one second and afterwards check no changes were triggered
+	dds_sleepfor(100000000);
+
+	CU_ASSERT_EQUAL(expected, result);
 
 	ddsrt_ip_change_notify_free(icnd);
 	delete_if(&info_one);
