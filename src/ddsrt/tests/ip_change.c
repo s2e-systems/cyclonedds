@@ -381,62 +381,42 @@ static void delete_if(struct if_info* info)
 #endif
 }
 
-CU_Init(ddsrt_dhcp)
+static char if_name_one[256];
+static char if_name_two[256];
+static struct if_info info_one;
+static struct if_info info_two;
+
+CU_Init(ddsrt_ip_change_notify)
 {
 	ddsrt_init();
+	create_if(if_name_one, &info_one);
+	create_if(if_name_two, &info_two);
 	return 0;
 }
 
-CU_Clean(ddsrt_dhcp)
+CU_Clean(ddsrt_ip_change_notify)
 {
+	delete_if(&info_one);
+	delete_if(&info_two);
 	ddsrt_fini();
 	return 0;
-}
-
-CU_Test(ddsrt_ip_change_notify, ipv4_single_interface)
-{
-	const int expected = 1;
-
-	char if_name[256];
-	const char* ip_before = "10.12.0.1";
-	const char* ip_after = "10.12.0.2";
-	int result = 0;
-	struct if_info info;
-
-	create_if(if_name, &info);
-	change_address(if_name, ip_before);
-	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name, &result);
-	change_address(if_name, ip_after);
-	while (!gtermflag)
-	{
-		dds_sleepfor(10);
-	}
-	ddsrt_ip_change_notify_free(icnd);
-	delete_if(&info);
-
-	CU_ASSERT_EQUAL(expected, result);
 }
 
 CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
 {
 	const int expected = 1;
 
-	char if_name_one[256];
-	char if_name_two[256];
-	struct if_info info_one;
-	struct if_info info_two;
 	const char* ip_if_two = "10.13.0.1";
 	const char* ip_before = "10.12.0.1";
 	const char* ip_after = "10.12.0.2";
 	int result = 0;
 
-	create_if(if_name_one, &info_one);
-	create_if(if_name_two, &info_two);
 	change_address(if_name_one, ip_before);
 	change_address(if_name_two, ip_if_two);
 
-	printf("Going to monitor interface %s\n", if_name_one);
 	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name_one, &result);
+	// Wait before changing the address so that the monitoring thread can get started
+	dds_sleepfor(1000000000);
 	change_address(if_name_one, ip_after);
 	while (!gtermflag)
 	{
@@ -447,30 +427,24 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
 	CU_ASSERT_EQUAL(expected, result);
 
 	ddsrt_ip_change_notify_free(icnd);
-	delete_if(&info_one);
-	delete_if(&info_two);
+
 }
 
 CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
 {
 	const int expected = 0;
 
-	char if_name_one[256];
-	char if_name_two[256];
-	struct if_info info_one;
-	struct if_info info_two;
-	const char* ip_if_two = "10.13.0.1";
-	const char* ip_before = "10.12.0.1";
-	const char* ip_after = "10.12.0.2";
+	const char* ip_if_two = "11.13.0.1";
+	const char* ip_before = "11.12.0.1";
+	const char* ip_after = "11.12.0.2";
 	int result = 0;
 
-	create_if(if_name_one, &info_one);
-	create_if(if_name_two, &info_two);
 	change_address(if_name_one, ip_before);
 	change_address(if_name_two, ip_if_two);
 
-	printf("Going to monitor interface %s\n", if_name_two);
 	struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, if_name_two, &result);
+	// Wait before changing the address so that the monitoring thread can get started
+	dds_sleepfor(1000000000);
 	change_address(if_name_one, ip_after);
 
 	// Wait for one second and afterwards check no changes were triggered
@@ -479,8 +453,5 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
 	CU_ASSERT_EQUAL(expected, result);
 
 	ddsrt_ip_change_notify_free(icnd);
-	delete_if(&info_one);
-	delete_if(&info_two);
-
 }
 

@@ -24,6 +24,12 @@ struct ddsrt_ip_change_notify_data
 
 static uint32_t ip_change_notify_thread(void* context)
 {
+    
+    HANDLE hand = NULL;
+    OVERLAPPED overlap;
+    DWORD wait_ret;
+    bool found = false;
+    overlap.hEvent = WSACreateEvent();
     dds_return_t ret;
     ddsrt_ifaddrs_t* ifa_root_previous, * ifa_root, * ifa, * ifa_previous;
     const int afs[] = { AF_INET, DDSRT_AF_TERM };
@@ -39,29 +45,24 @@ static uint32_t ip_change_notify_thread(void* context)
         DDS_ERROR("Error retrieving interface addresses\n");
     }
 
-    //printf("Searching for %s\n", icn->if_name);
-    //// Go through the address list and find the original address
-    //// for the interface being monitored
-    //for (ifa = ifa_root; ifa; ifa = ifa->next)
-    //{
-    //    printf("Interface %s\n", ifa->name);
-    //    if (ddsrt_strcasecmp(ifa->name, icn->if_name) == 0)
-    //    {
-    //        char buf[256];
-    //        
-    //        memcpy(&addr, ifa->addr, sizeof(struct sockaddr));
-    //        ddsrt_sockaddrtostr(&addr, buf, 256);
-    //        printf("Found with address %s \n", buf);
-    //        memcpy(&netmask, ifa->netmask, sizeof(struct sockaddr));
-    //        break;
-    //    }
-    //}
-    
+    if (NotifyAddrChange(&hand, &overlap) != NO_ERROR)
+    {
+        if (WSAGetLastError() != WSA_IO_PENDING)
+        {
+            DDS_ERROR("Error %d creating address change notification\n", WSAGetLastError());
+        }
+        
+    }
 
     while(!icn->termflag)
     {
-        if (NotifyAddrChange(NULL, NULL) == NO_ERROR)
+        wait_ret = WaitForSingleObject(overlap.hEvent, 1000 /*dwMilliseconds*/);
+        if (wait_ret == WAIT_OBJECT_0)
         {
+            // Manually reset the event and notify for the next possible change
+            WSAResetEvent(overlap.hEvent);
+            NotifyAddrChange(&hand, &overlap);
+
             // Retrieve the list of addresses
             ret = ddsrt_getifaddrs(&ifa_root, afs);
             if (ret != DDS_RETCODE_OK)
@@ -75,8 +76,7 @@ static uint32_t ip_change_notify_thread(void* context)
             {
                 if (ddsrt_strcasecmp(ifa->name, icn->if_name) == 0)
                 {
-                    bool found = false;
-
+                    found = false;
                     for (ifa_previous = ifa_root_previous; ifa_previous; ifa_previous = ifa_previous->next)
                     {
                         if (ddsrt_strcasecmp(ifa->name, ifa_previous->name) == 0 &&
@@ -95,14 +95,15 @@ static uint32_t ip_change_notify_thread(void* context)
                     }
                 }
             }
-            
+            ddsrt_freeifaddrs(ifa_root_previous);
+            ifa_root_previous = ifa_root;
+            ifa_root = NULL;
         }
-        else
+        else if (wait_ret != WAIT_TIMEOUT)
         {
-            DDS_INFO("NotifyAddrChange error...%d\n", WSAGetLastError());
+            DDS_ERROR("NotifyAddrChange error...%d\n", WSAGetLastError());
         }
     }
-    ddsrt_freeifaddrs(ifa_root);
     ddsrt_freeifaddrs(ifa_root_previous);
     return 0;
 }
