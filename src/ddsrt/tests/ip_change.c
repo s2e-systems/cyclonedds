@@ -492,3 +492,32 @@ CU_Test(ddsrt_ip_change_notify, no_changes)
 	ddsrt_ip_change_notify_free(icnd);
   delete_if(&info_two);
 }
+
+CU_Test(ddsrt_ip_change_notify, create_and_free)
+{
+  const int expected = 1;
+
+  const char* ip_before = "10.12.0.1";
+  const char* ip_after = "10.12.0.2";
+  int result = 0;
+  struct ddsrt_ip_change_notify_data* icnd;
+
+  create_if(&info_one);
+  change_address(info_one.if_name, ip_before);
+
+  icnd = ddsrt_ip_change_notify_new(NULL, info_one.if_name, NULL);
+  ddsrt_ip_change_notify_free(icnd);
+  icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &result);
+  // Wait before changing the address so that the monitoring thread can get started
+  dds_sleepfor(DDS_MSECS(1000));
+  change_address(info_one.if_name, ip_after);
+  while (!gtermflag)
+  {
+    dds_sleepfor(10);
+  }
+  CU_ASSERT_EQUAL(expected, result);
+
+  ddsrt_ip_change_notify_free(icnd);
+  delete_if(&info_one);
+}
+

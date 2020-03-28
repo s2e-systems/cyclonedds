@@ -84,7 +84,7 @@ struct ddsrt_ip_change_notify_data *ddsrt_ip_change_notify_new(dds_ip_change_not
   ddsrt_threadattr_init(&attr);
 
 
-  if ((icnd->sock = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE)) == -1) {
+  if ((icnd->sock = socket(PF_NETLINK, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, NETLINK_ROUTE)) == -1) {
     DDS_ERROR("couldn't open NETLINK_ROUTE socket");
   }
 
@@ -110,8 +110,6 @@ void ddsrt_ip_change_notify_free(struct ddsrt_ip_change_notify_data* icnd)
 {
   icnd->termflag = 1;
   ddsrt_thread_join(icnd->thread, NULL);
-//  char buffer[9000];
-//  recv(icnd->sock, buffer, 9000, 0);
   int ret = close(icnd->sock);
   if (ret != 0)
   {
