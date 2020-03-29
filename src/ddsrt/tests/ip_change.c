@@ -82,24 +82,6 @@ static char* get_ip_str(const struct sockaddr* sa, char* s, socklen_t maxlen)
 	return s;
 }
 
-static void printIPAddress()
-{
-	dds_return_t ret;
-	ddsrt_ifaddrs_t* ifa_root, * ifa;
-	const int afs[] = { AF_INET, DDSRT_AF_TERM };
-	ret = ddsrt_getifaddrs(&ifa_root, afs);
-	if (ret == DDS_RETCODE_OK)
-	{
-		for (ifa = ifa_root; ifa; ifa = ifa->next)
-		{
-			char ip_addr[AF_MAX];
-			get_ip_str(ifa->addr, (char*)&ip_addr, AF_MAX);
-			printf("if: %s (%s)\n", ifa->name, ip_addr);
-		}
-	}
-	ddsrt_freeifaddrs(ifa_root);
-}
-
 static void callback(void* vdata)
 {
 	int* data = (int*)vdata;
