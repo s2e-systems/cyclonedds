@@ -463,7 +463,7 @@ CU_Test(ddsrt_ip_change_notify, no_changes)
   struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &result);
 
 	// Wait for one second and afterwards check no changes were triggered and that the test finalizes (i.e doesn't get blocked on the free)
-	dds_sleepfor(100000000);
+	dds_sleepfor(DDS_SECS(1));
 
 	CU_ASSERT_EQUAL(expected, result);
 
