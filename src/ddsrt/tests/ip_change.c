@@ -350,19 +350,9 @@ static void delete_if(struct if_info* info)
 #endif
 }
 
-static struct if_info info_one;
-static struct if_info info_two;
-
 CU_Init(ddsrt_ip_change_notify)
 {
 	ddsrt_init();
-    memset(&info_one, 0, sizeof(struct if_info));
-    memset(&info_two, 0, sizeof(struct if_info));
-
-#ifdef __linux__
-    sprintf(info_one.if_name, "eth11");
-    sprintf(info_two.if_name, "eth12");
-#endif
 	return 0;
 }
 
@@ -380,6 +370,14 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
 	const char* ip_before = "10.12.0.1";
 	const char* ip_after = "10.12.0.2";
 	int result = 0;
+
+    struct if_info info_one = { 0 };
+    struct if_info info_two = { 0 };
+
+#ifdef __linux__
+    sprintf(info_one.if_name, "eth11");
+    sprintf(info_two.if_name, "eth12");
+#endif
 
   create_if(&info_one);
   create_if(&info_two);
@@ -416,6 +414,14 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
   int result_if_one = 0;
   int result_if_two = 0;
 
+  struct if_info info_one = { 0 };
+  struct if_info info_two = { 0 };
+
+#ifdef __linux__
+  sprintf(info_one.if_name, "eth13");
+  sprintf(info_two.if_name, "eth14");
+#endif
+
   create_if(&info_one);
   create_if(&info_two);
 
@@ -445,8 +451,15 @@ CU_Test(ddsrt_ip_change_notify, no_changes)
 {
 	const int expected = 0;
 	int result = 0;
+    const char* ip_before = "40.12.0.1";
+
+    struct if_info info_two = { 0 };
+#ifdef __linux__
+    sprintf(info_two.if_name, "eth15");
+#endif
 
   create_if(&info_two);
+  change_address(info_two.if_name, ip_before);
   struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &result);
 
 	// Wait for one second and afterwards check no changes were triggered and that the test finalizes (i.e doesn't get blocked on the free)
@@ -462,11 +475,15 @@ CU_Test(ddsrt_ip_change_notify, create_and_free)
 {
   const int expected = 1;
 
-  const char* ip_before = "10.12.0.1";
-  const char* ip_after = "10.12.0.2";
+  const char* ip_before = "30.12.0.1";
+  const char* ip_after = "30.12.0.2";
   int result = 0;
   struct ddsrt_ip_change_notify_data* icnd;
 
+  struct if_info info_one = { 0 };
+#ifdef __linux__
+  sprintf(info_one.if_name, "eth16");
+#endif
   create_if(&info_one);
   change_address(info_one.if_name, ip_before);
 
