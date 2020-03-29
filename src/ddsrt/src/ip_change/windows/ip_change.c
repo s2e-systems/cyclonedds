@@ -104,6 +104,7 @@ static uint32_t ip_change_notify_thread(void* context)
             DDS_ERROR("NotifyAddrChange error...%d\n", WSAGetLastError());
         }
     }
+    CancelIPChangeNotify(&overlap);
     ddsrt_freeifaddrs(ifa_root_previous);
     return 0;
 }

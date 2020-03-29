@@ -102,8 +102,6 @@ static void printIPAddress()
 
 static void callback(void* vdata)
 {
-  printIPAddress();
-	printf("IP  Change triggered\n");
 	int* data = (int*)vdata;
 	*data = 1;
 	gtermflag = 1;
@@ -337,14 +335,15 @@ static int create_if(struct if_info* info)
     // Do nothing
   }
 
+  CancelMibChangeNotify2(callbackChangeHandle);
+
   // Get the interface name alias
-  if_indextoname(IfIndex, if_name);
   NET_LUID IfLuid;
   WCHAR IfNameW[256];
   size_t return_value;
   ConvertInterfaceIndexToLuid(IfIndex, &IfLuid);
   ConvertInterfaceLuidToAlias(&IfLuid, IfNameW, 256);
-  wcstombs_s(&return_value, if_name, 256, IfNameW, 256);
+  wcstombs_s(&return_value, info->if_name, 256, IfNameW, _TRUNCATE);
 
   return 1;
 
@@ -381,6 +380,8 @@ static void delete_if(struct if_info* info)
     //
     printf("Error removing");
   }
+
+  memset(info, 0, sizeof(*info));
 #else
   char buf[512];
   sprintf(buf, "sudo ip link delete %s", info->if_name);
@@ -394,9 +395,12 @@ static struct if_info info_two;
 CU_Init(ddsrt_ip_change_notify)
 {
 	ddsrt_init();
-#ifndef _WIN32
-  sprintf(info_one.if_name, "eth11");
-  sprintf(info_two.if_name, "eth12");
+    memset(&info_one, 0, sizeof(struct if_info));
+    memset(&info_two, 0, sizeof(struct if_info));
+
+#ifdef __linux__
+    sprintf(info_one.if_name, "eth11");
+    sprintf(info_two.if_name, "eth12");
 #endif
 	return 0;
 }
