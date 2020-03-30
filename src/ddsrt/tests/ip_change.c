@@ -33,6 +33,7 @@
 #include <io.h>
 #include <fcntl.h>
 #include <Iphlpapi.h>
+#include <netioapi.h>
 
 typedef BOOL(WINAPI* UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndParent,
 	_In_ LPCTSTR HardwareId,
