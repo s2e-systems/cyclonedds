@@ -68,35 +68,6 @@ static void callback(void* vdata)
 	gtermflag = 1;
 }
 
-#ifndef _WIN32
-static void checkIoctlError(int e, int i)
-{
-	if (e == -1)
-	{
-		printf("At %d:", i);
-		char* str = malloc(256);
-		switch (errno)
-		{
-		case EBADF:
-			str = "fd is not a valid file descriptor";
-			break;
-		case EFAULT:
-			str = "argp references an inaccessible memory area.";
-			break;
-		case EINVAL:
-			str = "request or argp is not valid.";
-			break;
-		case ENOTTY:
-			str = "fd is not associated with a character special device. The specified request does not apply to the kind of object that the file descriptor fd references.";
-			break;
-		default:
-			str = strerror(errno);
-		}
-		printf("ioctl error: %s\n", str);
-	}
-}
-#endif
-
 
 static void change_address(const char* if_name, const char* ip)
 {
@@ -134,22 +105,9 @@ static void change_address(const char* if_name, const char* ip)
   //DeleteIPAddress(NTEContext);
 
 #else
-  struct ifreq ifr;
-  int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
-
-  strncpy(ifr.ifr_name, if_name, IFNAMSIZ);
-
-  ifr.ifr_addr.sa_family = AF_INET;
-  struct sockaddr_in* addr = (struct sockaddr_in*) & ifr.ifr_addr;
-  int r1 = inet_pton(AF_INET, ip, &addr->sin_addr);
-  if (r1 != 1)
-  {
-    exit(-1);
-  }
-  int r2 = ioctl(fd, SIOCSIFADDR, &ifr);
-  checkIoctlError(r2, 2);
-
-  close(fd);
+  char buf[512];
+  sprintf(buf, "sudo ifconfig %s %s", if_name, ip);
+  system(buf);
 
 #endif
 }
