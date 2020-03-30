@@ -82,6 +82,7 @@ struct ddsrt_ip_change_notify_data *ddsrt_ip_change_notify_new(dds_ip_change_not
   icnd->data = data;
   icnd->if_name = if_name;
   ddsrt_threadattr_init(&attr);
+  icnd->termflag = 0;
 
 
   if ((icnd->sock = socket(PF_NETLINK, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, NETLINK_ROUTE)) == -1) {
