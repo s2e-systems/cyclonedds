@@ -107,7 +107,11 @@ static void change_address(const char* if_name, const char* ip)
 #else
   char buf[512];
   sprintf(buf, "sudo ifconfig %s %s", if_name, ip);
-  system(buf);
+  int ret = system(buf);
+  if (ret != 0)
+  {
+    CU_FAIL("Changing IP address of interface failed");
+  }
 
 #endif
 }
@@ -277,7 +281,11 @@ static int create_if(struct if_info* info)
 #else
   char buf[512];
   sprintf(buf, "sudo ip link add %s type dummy", info->if_name);
-  system(buf);
+  int ret = system(buf);
+  if (ret != 0)
+  {
+    CU_FAIL("Creating interface failed");
+  }
   return 1;
 #endif
 }
@@ -304,7 +312,11 @@ static void delete_if(struct if_info* info)
 #else
   char buf[512];
   sprintf(buf, "sudo ip link delete %s", info->if_name);
-  system(buf);
+  int ret = system(buf);
+  if (ret != 0)
+  {
+    CU_FAIL("Deleting interface failed");
+  }
 #endif
 }
 
