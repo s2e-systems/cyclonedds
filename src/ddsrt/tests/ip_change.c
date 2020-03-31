@@ -112,7 +112,7 @@ static void change_address(const char* if_name, const char* ip)
 }
 
 #ifdef _WIN32
-void interface_change_cb(_In_ PVOID CallerContext, _In_ PMIB_IPINTERFACE_ROW Row OPTIONAL, _In_ MIB_NOTIFICATION_TYPE NotificationType)
+void NETIOAPI_API_ interface_change_cb(_In_ PVOID CallerContext, _In_ PMIB_IPINTERFACE_ROW Row OPTIONAL, _In_ MIB_NOTIFICATION_TYPE NotificationType)
 {
     PDWORD index = (PDWORD)CallerContext;
 	switch (NotificationType) {
