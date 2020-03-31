@@ -118,7 +118,7 @@ static void change_address(const char* if_name, const char* ip)
 }
 
 #ifdef _WIN32
-void interface_change_cb(IN PVOID CallerContext, IN PMIB_IPINTERFACE_ROW Row OPTIONAL, IN MIB_NOTIFICATION_TYPE NotificationType)
+void interface_change_cb(_In_ PVOID CallerContext, _In_ PMIB_IPINTERFACE_ROW Row OPTIONAL, _In_ MIB_NOTIFICATION_TYPE NotificationType)
 {
 	PDWORD index = CallerContext;
 	switch (NotificationType) {
@@ -200,7 +200,7 @@ static int create_if(struct if_info* info)
     &info->DeviceInfoData))
   {
     DWORD error = GetLastError();
-    printf("Error: %u", error);
+    printf("SetupDiCreateDeviceInfo failed with error: %lu\n", error);
     goto final;
   }
 
@@ -225,9 +225,8 @@ static int create_if(struct if_info* info)
     info->DeviceInfoSet,
     &info->DeviceInfoData))
   {
-    printf("Failed SetupDiCallClassInstaller\n");
     DWORD error = GetLastError();
-    printf("Error: %u\n", error);
+    printf("Failed SetupDiCallClassInstaller with error: %lu\n", error);
     goto final;
   }
 
@@ -273,7 +272,6 @@ static int create_if(struct if_info* info)
 
   final:
 
-  //printf("Error: %s", GetLastError());
   if (info->DeviceInfoSet != INVALID_HANDLE_VALUE) {
     SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
   }
@@ -295,7 +293,6 @@ static void delete_if(struct if_info* info)
 {
 #ifdef _WIN32
   SP_REMOVEDEVICE_PARAMS rmdParams;
-  LPCTSTR action = NULL;
 
   rmdParams.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
   rmdParams.ClassInstallHeader.InstallFunction = DIF_REMOVE;
