@@ -47,7 +47,6 @@ typedef BOOL(WINAPI* UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndP
 #endif
 
 
-static volatile sig_atomic_t gtermflag = 0;
 struct if_info {
 #ifdef _WIN32
   HDEVINFO DeviceInfoSet;
@@ -56,12 +55,18 @@ struct if_info {
   char if_name[256];
 };
 
+struct callback_data {
+    int result;
+    volatile sig_atomic_t termflag;
+};
+
 static void callback(void* vdata)
 {
-	int* data = (int*)vdata;
-	*data = 1;
-	gtermflag = 1;
+    struct callback_data* data = (struct callback_data*)vdata;
+    data->result = 1;
+    data->termflag = 1;
 }
+
 
 
 static void change_address(const char* if_name, const char* ip)
@@ -85,7 +90,7 @@ static void change_address(const char* if_name, const char* ip)
   ret = AddIPAddress(ip_addr.sin_addr.S_un.S_addr /*Address*/, netmask_addr.sin_addr.S_un.S_addr /*IpMask*/, IfIndex, &NTEContext, &NTEInstance);
   if (ret != NO_ERROR)
   {
-    printf("Error adding ip address %d\n", ret);
+    printf("Error adding ip address %lu\n", ret);
   }
 
   //IPAddr ip_new = inet_addr("10.11.12.14");
@@ -331,8 +336,6 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
 	const char* ip_if_two = "10.13.0.1";
 	const char* ip_before = "10.12.0.1";
 	const char* ip_after = "10.12.0.2";
-	int result = 0;
-
     struct if_info info_one = { 0 };
     struct if_info info_two = { 0 };
 
@@ -346,19 +349,20 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
 
   change_address(info_one.if_name, ip_before);
   change_address(info_two.if_name, ip_if_two);
-  gtermflag = 0;
+  struct callback_data data = {.result = 0, .termflag = 0};
 
-  struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &result);
-	// Wait before changing the address so that the monitoring thread can get started
+
+  struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data);
+    // Wait before changing the address so that the monitoring thread can get started
 	dds_sleepfor(1000000000);
   change_address(info_one.if_name, ip_after);
-	while (!gtermflag)
+    while (!data.termflag)
 	{
 		dds_sleepfor(10);
 	}
 
 
-	CU_ASSERT_EQUAL(expected, result);
+    CU_ASSERT_EQUAL(expected, data.result);
 
 	ddsrt_ip_change_notify_free(icnd);
   delete_if(&info_one);
@@ -374,11 +378,12 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
   const char* ip_if_two = "21.13.0.1";
   const char* ip_before = "21.12.0.1";
   const char* ip_after = "21.12.0.2";
-  int result_if_one = 0;
-  int result_if_two = 0;
 
   struct if_info info_one = { 0 };
   struct if_info info_two = { 0 };
+
+  struct callback_data data_one = {.result = 0, .termflag = 0};
+  struct callback_data data_two = {.result = 0, .termflag = 0};
 
 #ifdef __linux__
   sprintf(info_one.if_name, "eth13");
@@ -391,9 +396,9 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
   change_address(info_one.if_name, ip_before);
   change_address(info_two.if_name, ip_if_two);
 
-  gtermflag = 0;
-  struct ddsrt_ip_change_notify_data* icnd_one = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &result_if_one);
-  struct ddsrt_ip_change_notify_data* icnd_two = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &result_if_two);
+
+  struct ddsrt_ip_change_notify_data* icnd_one = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data_one);
+  struct ddsrt_ip_change_notify_data* icnd_two = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &data_two);
 
   // Wait before changing the address so that the monitoring thread can get started
   dds_sleepfor(DDS_SECS(1));
@@ -402,8 +407,8 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
 	// Wait for one second and afterwards check no changes were triggered
   dds_sleepfor(DDS_SECS(1));
 
-  CU_ASSERT_EQUAL(expected_if_one, result_if_one);
-  CU_ASSERT_EQUAL(expected_if_two, result_if_two);
+  CU_ASSERT_EQUAL(expected_if_one, data_one.result);
+  CU_ASSERT_EQUAL(expected_if_two, data_two.result);
 
   ddsrt_ip_change_notify_free(icnd_one);
   ddsrt_ip_change_notify_free(icnd_two);
@@ -411,30 +416,6 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
   delete_if(&info_two);
 }
 
-CU_Test(ddsrt_ip_change_notify, no_changes)
-{
-	const int expected = 0;
-	int result = 0;
-    const char* ip_before = "40.12.0.1";
-
-    struct if_info info_two = { 0 };
-#ifdef __linux__
-    sprintf(info_two.if_name, "eth15");
-#endif
-
-  create_if(&info_two);
-  change_address(info_two.if_name, ip_before);
-  gtermflag = 0;
-  struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &result);
-
-	// Wait for one second and afterwards check no changes were triggered and that the test finalizes (i.e doesn't get blocked on the free)
-	dds_sleepfor(DDS_SECS(1));
-
-	CU_ASSERT_EQUAL(expected, result);
-
-	ddsrt_ip_change_notify_free(icnd);
-  delete_if(&info_two);
-}
 
 CU_Test(ddsrt_ip_change_notify, create_and_free)
 {
@@ -442,10 +423,11 @@ CU_Test(ddsrt_ip_change_notify, create_and_free)
 
   const char* ip_before = "30.12.0.1";
   const char* ip_after = "30.12.0.2";
-  int result = 0;
   struct ddsrt_ip_change_notify_data* icnd;
 
   struct if_info info_one = { 0 };
+  struct callback_data data = {.result = 0, .termflag = 0};
+
 #ifdef __linux__
   sprintf(info_one.if_name, "eth16");
 #endif
@@ -454,16 +436,16 @@ CU_Test(ddsrt_ip_change_notify, create_and_free)
 
   icnd = ddsrt_ip_change_notify_new(NULL, info_one.if_name, NULL);
   ddsrt_ip_change_notify_free(icnd);
-  gtermflag = 0;
-  icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &result);
+
+  icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data);
   // Wait before changing the address so that the monitoring thread can get started
   dds_sleepfor(DDS_MSECS(1000));
   change_address(info_one.if_name, ip_after);
-  while (!gtermflag)
+  while (!data.termflag)
   {
     dds_sleepfor(10);
   }
-  CU_ASSERT_EQUAL(expected, result);
+  CU_ASSERT_EQUAL(expected, data.result);
 
   ddsrt_ip_change_notify_free(icnd);
   delete_if(&info_one);
