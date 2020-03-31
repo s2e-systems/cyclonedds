@@ -27,6 +27,7 @@
     #include <strsafe.h>
     #include <io.h>
     #include <fcntl.h>
+    #include <ws2ipdef.h>
     #include <Iphlpapi.h>
     #include <netioapi.h>
 #else
