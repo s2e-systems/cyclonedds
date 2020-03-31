@@ -15,20 +15,11 @@
 #include "CUnit/Test.h"
 
 #ifdef _WIN32
-    #include <Winsock2.h>
     #include <tchar.h>
     #include <setupapi.h>
-    #include <regstr.h>
-    #include <infstr.h>
     #include <cfgmgr32.h>
-    #include <malloc.h>
-    #include <newdev.h>
-    #include <objbase.h>
     #include <strsafe.h>
-    #include <io.h>
-    #include <fcntl.h>
     #include <Iphlpapi.h>
-    #include <netioapi.h>
 #else
     #include <sys/ioctl.h>
     #include <arpa/inet.h>
