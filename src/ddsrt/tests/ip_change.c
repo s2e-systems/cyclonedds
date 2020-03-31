@@ -14,27 +14,29 @@
 
 #include "CUnit/Test.h"
 
-#ifndef _WIN32
-#include <sys/ioctl.h>
-#include <arpa/inet.h>
-#include <net/if.h>
-#include <ifaddrs.h>
+#ifdef _WIN32
+    #include <Winsock2.h>
+    #include <tchar.h>
+    #include <setupapi.h>
+    #include <regstr.h>
+    #include <infstr.h>
+    #include <cfgmgr32.h>
+    #include <malloc.h>
+    #include <newdev.h>
+    #include <objbase.h>
+    #include <strsafe.h>
+    #include <io.h>
+    #include <fcntl.h>
+    #include <Iphlpapi.h>
+    #include <netioapi.h>
 #else
-#include <windows.h>
-#include <tchar.h>
-#include <setupapi.h>
-#include <regstr.h>
-#include <infstr.h>
-#include <cfgmgr32.h>
-#include <malloc.h>
-#include <newdev.h>
-#include <objbase.h>
-#include <strsafe.h>
-#include <io.h>
-#include <fcntl.h>
-#include <Iphlpapi.h>
-#include <netioapi.h>
+    #include <sys/ioctl.h>
+    #include <arpa/inet.h>
+    #include <net/if.h>
+    #include <ifaddrs.h>
+#endif
 
+#ifdef _WIN32
 typedef BOOL(WINAPI* UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndParent,
 	_In_ LPCTSTR HardwareId,
 	_In_ LPCTSTR FullInfPath,
@@ -42,16 +44,17 @@ typedef BOOL(WINAPI* UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndP
 	_Out_opt_ PBOOL bRebootRequired
 	);
 
-#ifdef _UNICODE
-#define UPDATEDRIVERFORPLUGANDPLAYDEVICES "UpdateDriverForPlugAndPlayDevicesW"
-#define SETUPUNINSTALLOEMINF "SetupUninstallOEMInfW"
-#else
-#define UPDATEDRIVERFORPLUGANDPLAYDEVICES "UpdateDriverForPlugAndPlayDevicesA"
-#define SETUPUNINSTALLOEMINF "SetupUninstallOEMInfA"
+    #ifdef _UNICODE
+        #define UPDATEDRIVERFORPLUGANDPLAYDEVICES "UpdateDriverForPlugAndPlayDevicesW"
+        #define SETUPUNINSTALLOEMINF "SetupUninstallOEMInfW"
+    #else
+        #define UPDATEDRIVERFORPLUGANDPLAYDEVICES "UpdateDriverForPlugAndPlayDevicesA"
+        #define SETUPUNINSTALLOEMINF "SetupUninstallOEMInfA"
+    #endif
+    #define SETUPSETNONINTERACTIVEMODE "SetupSetNonInteractiveMode"
+    #define SETUPVERIFYINFFILE "SetupVerifyInfFile"
 #endif
-#define SETUPSETNONINTERACTIVEMODE "SetupSetNonInteractiveMode"
-#define SETUPVERIFYINFFILE "SetupVerifyInfFile"
-#endif
+
 
 static volatile sig_atomic_t gtermflag = 0;
 struct if_info {
