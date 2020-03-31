@@ -123,7 +123,7 @@ static void change_address(const char* if_name, const char* ip)
 #ifdef _WIN32
 void interface_change_cb(_In_ PVOID CallerContext, _In_ PMIB_IPINTERFACE_ROW Row OPTIONAL, _In_ MIB_NOTIFICATION_TYPE NotificationType)
 {
-	PDWORD index = CallerContext;
+    PDWORD index = (PDWORD)CallerContext;
 	switch (NotificationType) {
 	case MibParameterNotification:
 		break;
@@ -355,6 +355,7 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
 
   change_address(info_one.if_name, ip_before);
   change_address(info_two.if_name, ip_if_two);
+  gtermflag = 0;
 
   struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &result);
 	// Wait before changing the address so that the monitoring thread can get started
@@ -399,6 +400,7 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
   change_address(info_one.if_name, ip_before);
   change_address(info_two.if_name, ip_if_two);
 
+  gtermflag = 0;
   struct ddsrt_ip_change_notify_data* icnd_one = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &result_if_one);
   struct ddsrt_ip_change_notify_data* icnd_two = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &result_if_two);
 
@@ -431,6 +433,7 @@ CU_Test(ddsrt_ip_change_notify, no_changes)
 
   create_if(&info_two);
   change_address(info_two.if_name, ip_before);
+  gtermflag = 0;
   struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &result);
 
 	// Wait for one second and afterwards check no changes were triggered and that the test finalizes (i.e doesn't get blocked on the free)
@@ -460,6 +463,7 @@ CU_Test(ddsrt_ip_change_notify, create_and_free)
 
   icnd = ddsrt_ip_change_notify_new(NULL, info_one.if_name, NULL);
   ddsrt_ip_change_notify_free(icnd);
+  gtermflag = 0;
   icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &result);
   // Wait before changing the address so that the monitoring thread can get started
   dds_sleepfor(DDS_MSECS(1000));
