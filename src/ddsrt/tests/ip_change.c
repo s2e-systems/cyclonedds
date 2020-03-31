@@ -20,30 +20,13 @@
     #include <cfgmgr32.h>
     #include <strsafe.h>
     #include <Iphlpapi.h>
+    #include <newdev.h>
+    #include <shlwapi.h>
 #else
     #include <sys/ioctl.h>
     #include <arpa/inet.h>
     #include <net/if.h>
     #include <ifaddrs.h>
-#endif
-
-#ifdef _WIN32
-typedef BOOL(WINAPI* UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndParent,
-	_In_ LPCTSTR HardwareId,
-	_In_ LPCTSTR FullInfPath,
-	_In_ DWORD InstallFlags,
-	_Out_opt_ PBOOL bRebootRequired
-	);
-
-    #ifdef _UNICODE
-        #define UPDATEDRIVERFORPLUGANDPLAYDEVICES "UpdateDriverForPlugAndPlayDevicesW"
-        #define SETUPUNINSTALLOEMINF "SetupUninstallOEMInfW"
-    #else
-        #define UPDATEDRIVERFORPLUGANDPLAYDEVICES "UpdateDriverForPlugAndPlayDevicesA"
-        #define SETUPUNINSTALLOEMINF "SetupUninstallOEMInfA"
-    #endif
-    #define SETUPSETNONINTERACTIVEMODE "SetupSetNonInteractiveMode"
-    #define SETUPVERIFYINFFILE "SetupVerifyInfFile"
 #endif
 
 
@@ -140,32 +123,23 @@ void NETIOAPI_API_ interface_change_cb(_In_ PVOID CallerContext, _In_ PMIB_IPINT
 static int create_if(struct if_info* info)
 {
 #ifdef _WIN32
+  DWORD dwRet;
   TCHAR InfPath[MAX_PATH];
-  LPCSTR inf = "C:\\Windows\\inf\\netloop.inf\0";
+  LPCSTR infFileName = "inf\\netloop.inf\0";
   LPCTSTR hwid = "*msloop";
   GUID ClassGUID;
   TCHAR ClassName[MAX_CLASS_NAME_LEN];
   TCHAR hwIdList[LINE_LEN + 4];
-
-  HMODULE newdevMod = NULL;
-  UpdateDriverForPlugAndPlayDevicesProto UpdateFn;
-  DWORD flags = 0;
+  DWORD flags = INSTALLFLAG_READONLY | INSTALLFLAG_NONINTERACTIVE;
   BOOL reboot = FALSE;
-
-  //
-  // Inf must be a full pathname
-  //
-  if (GetFullPathName(inf, MAX_PATH, InfPath, NULL) >= MAX_PATH) {
-    //
-    // inf pathname too long
-    //
-    printf("Pathname too long");
-    return -1;
+  LPTSTR windir = (LPTSTR) malloc(MAX_PATH*sizeof(TCHAR));
+  dwRet = GetEnvironmentVariable(TEXT("WINDIR"), windir, MAX_PATH);
+  if(dwRet == 0) {
+      CU_FAIL("WINDIR environment variable not found")
   }
+  PathCombine((char *)InfPath, windir, infFileName);
 
-  //
   // List of hardware ID's must be double zero-terminated
-  //
   ZeroMemory(hwIdList, sizeof(hwIdList));
   if (FAILED(StringCchCopy(hwIdList, LINE_LEN, hwid))) {
     goto final;
@@ -236,32 +210,18 @@ static int create_if(struct if_info* info)
     return -2;
   }
 
-  //
-  // make use of UpdateDriverForPlugAndPlayDevices
-  //
-  newdevMod = LoadLibrary(TEXT("newdev.dll"));
-  if (!newdevMod) {
-    goto final;
-  }
-  UpdateFn = (UpdateDriverForPlugAndPlayDevicesProto)GetProcAddress(newdevMod, UPDATEDRIVERFORPLUGANDPLAYDEVICES);
-  if (!UpdateFn)
-  {
-    goto final;
-  }
-
   HANDLE callbackChangeHandle;
   DWORD IfIndex = 0;
-
   NotifyIpInterfaceChange(AF_UNSPEC /*Family*/, interface_change_cb /*PIPINTERFACE_CHANGE_CALLBACK Callback*/,
     (void*)&IfIndex /*CallerContext*/, FALSE /*InitialNotification*/, &callbackChangeHandle /*NotificationHandle*/);
 
-  if (!UpdateFn(NULL, hwid, inf, flags, &reboot)) {
+  if (!UpdateDriverForPlugAndPlayDevicesA(NULL, hwid, InfPath, flags, &reboot)) {
     goto final;
   }
 
   // Wait until the interface is ready
   while (IfIndex == 0) {
-    // Do nothing
+    dds_sleepfor(DDS_USECS(10));
   }
 
   CancelMibChangeNotify2(callbackChangeHandle);
@@ -336,7 +296,7 @@ CU_Clean(ddsrt_ip_change_notify)
 	return 0;
 }
 
-CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
+CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces, .timeout = 60)
 {
 	const int expected = 1;
 
@@ -382,7 +342,7 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
 }
 
 
-CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
+CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface, .timeout = 60)
 {
   const int expected_if_one = 1;
   const int expected_if_two = 0;
@@ -401,7 +361,6 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
   sprintf(info_one.if_name, "eth13");
   sprintf(info_two.if_name, "eth14");
 #endif
-
   int ret = create_if(&info_one);
   if (ret == -2)
   {
@@ -420,7 +379,11 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
   dds_sleepfor(DDS_SECS(1));
   change_address(info_one.if_name, ip_after);
 
-	// Wait for one second and afterwards check no changes were triggered
+  while (!data_one.termflag)
+  {
+    dds_sleepfor(DDS_USECS(10));
+  }
+  // Wait for one second and afterwards check no changes were triggered
   dds_sleepfor(DDS_SECS(1));
 
   CU_ASSERT_EQUAL(expected_if_one, data_one.result);
@@ -433,7 +396,7 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
 }
 
 
-CU_Test(ddsrt_ip_change_notify, create_and_free)
+CU_Test(ddsrt_ip_change_notify, create_and_free, .timeout = 50)
 {
   const int expected = 1;
 
@@ -463,7 +426,7 @@ CU_Test(ddsrt_ip_change_notify, create_and_free)
   change_address(info_one.if_name, ip_after);
   while (!data.termflag)
   {
-    dds_sleepfor(10);
+    dds_sleepfor(DDS_USECS(10));
   }
   CU_ASSERT_EQUAL(expected, data.result);
 
