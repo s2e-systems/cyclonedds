@@ -225,8 +225,15 @@ static int create_if(struct if_info* info)
     &info->DeviceInfoData))
   {
     DWORD error = GetLastError();
-    printf("Failed SetupDiCallClassInstaller with error: %lu\n", error);
-    goto final;
+    if (error == ERROR_IN_WOW64)
+    {
+        CU_PASS("SetupDiCreateDeviceInfo failed. Skipping test");
+    }
+    //printf("Failed SetupDiCallClassInstaller with error: %lu\n", error);
+    if (info->DeviceInfoSet != INVALID_HANDLE_VALUE) {
+      SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
+    }
+    return -2;
   }
 
   //
@@ -344,8 +351,13 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces)
     sprintf(info_two.if_name, "eth12");
 #endif
 
-  create_if(&info_one);
+  int ret = create_if(&info_one);
+  if (ret == -2)
+  {
+      return;
+  }
   create_if(&info_two);
+
 
   change_address(info_one.if_name, ip_before);
   change_address(info_two.if_name, ip_if_two);
@@ -390,7 +402,11 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface)
   sprintf(info_two.if_name, "eth14");
 #endif
 
-  create_if(&info_one);
+  int ret = create_if(&info_one);
+  if (ret == -2)
+  {
+      return;
+  }
   create_if(&info_two);
 
   change_address(info_one.if_name, ip_before);
@@ -431,7 +447,11 @@ CU_Test(ddsrt_ip_change_notify, create_and_free)
 #ifdef __linux__
   sprintf(info_one.if_name, "eth16");
 #endif
-  create_if(&info_one);
+  int ret = create_if(&info_one);
+  if (ret == -2)
+  {
+      return;
+  }
   change_address(info_one.if_name, ip_before);
 
   icnd = ddsrt_ip_change_notify_new(NULL, info_one.if_name, NULL);
