@@ -18,6 +18,7 @@ struct ddsrt_ip_change_notify_data
     dds_ip_change_notify_callback cb;
     void* data;
     const char* if_name;
+    ddsrt_ifaddrs_t* ifa_root_previous;
     volatile sig_atomic_t termflag;
 };
 
@@ -31,19 +32,10 @@ static uint32_t ip_change_notify_thread(void* context)
     bool found = false;
     overlap.hEvent = WSACreateEvent();
     dds_return_t ret;
-    ddsrt_ifaddrs_t* ifa_root_previous, * ifa_root, * ifa, * ifa_previous;
+    ddsrt_ifaddrs_t* ifa_root, * ifa, * ifa_previous;
     const int afs[] = { AF_INET, DDSRT_AF_TERM };
-    //struct sockaddr addr;
-    //struct sockaddr netmask;
 
     struct ddsrt_ip_change_notify_data *icn = (struct ddsrt_ip_change_notify_data *)context;
-
-    // Retrieve the list of addresses
-    ret = ddsrt_getifaddrs(&ifa_root_previous, afs);
-    if (ret != DDS_RETCODE_OK)
-    {
-        DDS_ERROR("Error retrieving interface addresses\n");
-    }
 
     if (NotifyAddrChange(&hand, &overlap) != NO_ERROR)
     {
@@ -77,16 +69,17 @@ static uint32_t ip_change_notify_thread(void* context)
                 if (ddsrt_strcasecmp(ifa->name, icn->if_name) == 0)
                 {
                     found = false;
-                    for (ifa_previous = ifa_root_previous; ifa_previous; ifa_previous = ifa_previous->next)
+                    for (ifa_previous = icn->ifa_root_previous; ifa_previous; ifa_previous = ifa_previous->next)
                     {
                         if (ddsrt_strcasecmp(ifa->name, ifa_previous->name) == 0 &&
-                            memcmp(ifa->addr, ifa_previous->addr, sizeof(struct sockaddr)) == 0 && 
-                            memcmp(ifa->netmask, ifa_previous->netmask, sizeof(struct sockaddr)) == 0)
+                            memcmp(ifa->addr, ifa_previous->addr, sizeof(ifa->addr)) == 0 &&
+                            memcmp(ifa->netmask, ifa_previous->netmask, sizeof(ifa->netmask)) == 0)
                         {
                             found = true;
                             break;
                         }
                     }
+
 
                     if (!found)
                     {
@@ -96,36 +89,8 @@ static uint32_t ip_change_notify_thread(void* context)
                 }
             }
 
-            if (found == false)
-            {
-                for (ifa_previous = ifa_root_previous; ifa_previous; ifa_previous = ifa_previous->next)
-                {
-                    if (ddsrt_strcasecmp(ifa_previous->name, icn->if_name) == 0)
-                    {
-                        found = false;
-                        for (ifa = ifa_root; ifa; ifa = ifa->next)
-                        {
-                            if (ddsrt_strcasecmp(ifa->name, ifa_previous->name) == 0 &&
-                                memcmp(ifa->addr, ifa_previous->addr, sizeof(struct sockaddr)) == 0 &&
-                                memcmp(ifa->netmask, ifa_previous->netmask, sizeof(struct sockaddr)) == 0)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-
-                        if (!found)
-                        {
-                            icn->cb(icn->data);
-                            break;
-                        }
-                    }
-                }
-            }
-            
-
-            ddsrt_freeifaddrs(ifa_root_previous);
-            ifa_root_previous = ifa_root;
+            ddsrt_freeifaddrs(icn->ifa_root_previous);
+            icn->ifa_root_previous = ifa_root;
             ifa_root = NULL;
         }
         else if (wait_ret != WAIT_TIMEOUT)
@@ -134,7 +99,7 @@ static uint32_t ip_change_notify_thread(void* context)
         }
     }
     CancelIPChangeNotify(&overlap);
-    ddsrt_freeifaddrs(ifa_root_previous);
+    ddsrt_freeifaddrs(icn->ifa_root_previous);
     return 0;
 }
 
@@ -144,12 +109,21 @@ struct ddsrt_ip_change_notify_data *ddsrt_ip_change_notify_new(const char* if_na
     struct ddsrt_ip_change_notify_data *icnd = (struct ddsrt_ip_change_notify_data *)ddsrt_malloc(sizeof(*icnd));
     ddsrt_threadattr_t attr;
     dds_return_t osres;
+    dds_return_t ret;
+    const int afs[] = { AF_INET, DDSRT_AF_TERM };
 
     icnd->cb = cb;
     icnd->data = data;
     icnd->if_name = if_name;
     ddsrt_threadattr_init(&attr);
     icnd->termflag = 0;
+
+    // Retrieve the original list of addresses
+    ret = ddsrt_getifaddrs(&icnd->ifa_root_previous, afs);
+    if (ret != DDS_RETCODE_OK)
+    {
+        DDS_ERROR("Error retrieving interface addresses\n");
+    }
 
     osres = ddsrt_thread_create(&icnd->thread, "ip_change_notify", &attr, ip_change_notify_thread, (void*)icnd);
     if (osres != DDS_RETCODE_OK)
