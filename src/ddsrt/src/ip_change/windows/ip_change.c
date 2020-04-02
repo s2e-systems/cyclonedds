@@ -95,6 +95,35 @@ static uint32_t ip_change_notify_thread(void* context)
                     }
                 }
             }
+
+            if (found == false)
+            {
+                for (ifa_previous = ifa_root_previous; ifa_previous; ifa_previous = ifa_previous->next)
+                {
+                    if (ddsrt_strcasecmp(ifa_previous->name, icn->if_name) == 0)
+                    {
+                        found = false;
+                        for (ifa = ifa_root; ifa; ifa = ifa->next)
+                        {
+                            if (ddsrt_strcasecmp(ifa->name, ifa_previous->name) == 0 &&
+                                memcmp(ifa->addr, ifa_previous->addr, sizeof(struct sockaddr)) == 0 &&
+                                memcmp(ifa->netmask, ifa_previous->netmask, sizeof(struct sockaddr)) == 0)
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found)
+                        {
+                            icn->cb(icn->data);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+
             ddsrt_freeifaddrs(ifa_root_previous);
             ifa_root_previous = ifa_root;
             ifa_root = NULL;
