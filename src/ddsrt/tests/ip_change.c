@@ -34,6 +34,7 @@ struct if_info {
 #ifdef _WIN32
   HDEVINFO DeviceInfoSet;
   SP_DEVINFO_DATA DeviceInfoData;
+  ULONG NTEContext;
 #endif  
   char if_name[256];
 };
@@ -51,9 +52,7 @@ static void callback(void* vdata)
 }
 
 
-
-
-static void change_address(const char* if_name, const char* ip)
+static void add_address(struct if_info* info, const char* ip)
 {
 #ifdef _WIN32
   size_t num_char;
@@ -61,9 +60,8 @@ static void change_address(const char* if_name, const char* ip)
   NET_LUID IfLuid;
   DWORD IfIndex = 0;
   DWORD ret;
-  ULONG NTEContext = 0;
   ULONG NTEInstance = 0;
-  mbstowcs_s(&num_char, IfNameW, 256, if_name, 256);
+  mbstowcs_s(&num_char, IfNameW, 256, info->if_name, 256);
   ConvertInterfaceAliasToLuid(IfNameW, &IfLuid);
   ConvertInterfaceLuidToIndex(&IfLuid, &IfIndex);
 
@@ -71,30 +69,53 @@ static void change_address(const char* if_name, const char* ip)
   struct sockaddr_in netmask_addr;
   ddsrt_sockaddrfromstr(AF_INET, ip, &ip_addr);
   ddsrt_sockaddrfromstr(AF_INET, "255.255.0.0", &netmask_addr);
-  ret = AddIPAddress(ip_addr.sin_addr.S_un.S_addr /*Address*/, netmask_addr.sin_addr.S_un.S_addr /*IpMask*/, IfIndex, &NTEContext, &NTEInstance);
+  ret = AddIPAddress(ip_addr.sin_addr.S_un.S_addr /*Address*/, netmask_addr.sin_addr.S_un.S_addr /*IpMask*/, IfIndex, &info->NTEContext, &NTEInstance);
   if (ret != NO_ERROR)
   {
-    printf("Error adding ip address %lu\n", ret);
+    CU_FAIL_FATAL("Error adding ip address");
   }
 
-  //IPAddr ip_new = inet_addr("10.11.12.14");
-  //ULONG NTEContext_new = 0;
-  //ULONG NTEInstance_new = 0;
-  //ret = AddIPAddress(ip_new /*Address*/, netmask /*IpMask*/, IfIndex, &NTEContext_new, &NTEInstance_new);
-  //if (ret != NO_ERROR)
-  //{
-  //	printf("Error adding ip address %d\n", ret);
-  //}
+#else
+  char buf[512];
+  sprintf(buf, "sudo ip address add %s/24 dev %s", ip, if_name);
+  int ret = system(buf);
+  if (ret != 0)
+  {
+    CU_FAIL_FATAL("Changing IP address of interface failed");
+  }
 
-  //DeleteIPAddress(NTEContext);
+#endif
+}
 
+static void remove_address(const struct if_info* info)
+{
+#ifdef _WIN32
+  DeleteIPAddress(info->NTEContext);
+#else
+  char buf[512];
+  sprintf(buf, "sudo ip address delete %s dev %s", ip, if_name);
+  int ret = system(buf);
+  if (ret != 0)
+  {
+    CU_FAIL_FATAL("Changing IP address of interface failed");
+  }
+
+#endif
+}
+
+
+static void change_address(struct if_info* info, const char* ip)
+{
+#ifdef _WIN32
+  remove_address(info);
+  add_address(info, ip);
 #else
   char buf[512];
   sprintf(buf, "sudo ifconfig %s %s", if_name, ip);
   int ret = system(buf);
   if (ret != 0)
   {
-    CU_FAIL("Changing IP address of interface failed");
+    CU_FAIL_FATAL("Changing IP address of interface failed");
   }
 
 #endif
@@ -103,21 +124,10 @@ static void change_address(const char* if_name, const char* ip)
 #ifdef _WIN32
 void NETIOAPI_API_ interface_change_cb(_In_ PVOID CallerContext, _In_ PMIB_IPINTERFACE_ROW Row OPTIONAL, _In_ MIB_NOTIFICATION_TYPE NotificationType)
 {
-    PDWORD index = (PDWORD)CallerContext;
-	switch (NotificationType) {
-	case MibParameterNotification:
-		break;
-	case MibAddInstance:
-		*index = Row->InterfaceIndex;
-		break;
-	case MibDeleteInstance:
-		break;
-	case MibInitialNotification:
-		break;
-	default:
-		;
+  PDWORD index = (PDWORD)CallerContext;
+  if (NotificationType == MibAddInstance) {
+    *index = Row->InterfaceIndex;
 	}
-
 }
 #endif
 
@@ -280,16 +290,15 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces, .timeout = 60)
   create_if(&info_one);
   create_if(&info_two);
 
-
-  change_address(info_one.if_name, ip_before);
-  change_address(info_two.if_name, ip_if_two);
+  add_address(&info_one, ip_before);
+  add_address(&info_two, ip_if_two);
   struct callback_data data = {.result = 0, .termflag = 0};
 
 
   struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data);
   // Wait before changing the address so that the monitoring thread can get started
   dds_sleepfor(1000000000);
-  change_address(info_one.if_name, ip_after);
+  change_address(&info_one, ip_after);
   while (!data.termflag)
   {
     dds_sleepfor(10);
@@ -325,16 +334,15 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface, .timeout = 60)
   create_if(&info_one);
   create_if(&info_two);
 
-  change_address(info_one.if_name, ip_before);
-  change_address(info_two.if_name, ip_if_two);
-
+  add_address(&info_one, ip_before);
+  add_address(&info_two, ip_if_two);
 
   struct ddsrt_ip_change_notify_data* icnd_one = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data_one);
   struct ddsrt_ip_change_notify_data* icnd_two = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &data_two);
 
   // Wait before changing the address so that the monitoring thread can get started
   dds_sleepfor(DDS_SECS(1));
-  change_address(info_one.if_name, ip_after);
+  change_address(&info_one, ip_after);
 
   while (!data_one.termflag)
   {
@@ -368,7 +376,7 @@ CU_Test(ddsrt_ip_change_notify, create_and_free, .timeout = 50)
   sprintf(info_one.if_name, "eth16");
 #endif
   create_if(&info_one);
-  change_address(info_one.if_name, ip_before);
+  add_address(&info_one, ip_before);
 
   icnd = ddsrt_ip_change_notify_new(NULL, info_one.if_name, NULL);
   ddsrt_ip_change_notify_free(icnd);
@@ -376,7 +384,7 @@ CU_Test(ddsrt_ip_change_notify, create_and_free, .timeout = 50)
   icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data);
   // Wait before changing the address so that the monitoring thread can get started
   dds_sleepfor(DDS_MSECS(1000));
-  change_address(info_one.if_name, ip_after);
+  change_address(&info_one, ip_after);
   while (!data.termflag)
   {
     dds_sleepfor(DDS_USECS(10));
