@@ -52,6 +52,7 @@ static void callback(void* vdata)
 
 
 
+
 static void change_address(const char* if_name, const char* ip)
 {
 #ifdef _WIN32
@@ -120,7 +121,7 @@ void NETIOAPI_API_ interface_change_cb(_In_ PVOID CallerContext, _In_ PMIB_IPINT
 }
 #endif
 
-static int create_if(struct if_info* info)
+static void create_if(struct if_info* info)
 {
 #ifdef _WIN32
   DWORD dwRet;
@@ -183,9 +184,7 @@ static int create_if(struct if_info* info)
     DWORD error = GetLastError();
     SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
     switch (error) {
-        case ERROR_IN_WOW64:
-            CU_PASS("SetupDiCreateDeviceInfo failed. Skipping test");
-            return -2;
+        case ERROR_IN_WOW64: CU_FAIL_FATAL("SetupDiCreateDeviceInfo failed with ERROR_IN_WOW64");
         default: CU_FAIL_FATAL("SetupDiCallClassInstaller failed");
     }
   }
@@ -213,8 +212,6 @@ static int create_if(struct if_info* info)
   ConvertInterfaceLuidToAlias(&IfLuid, IfNameW, 256);
   wcstombs_s(&return_value, info->if_name, 256, IfNameW, _TRUNCATE);
 
-  return 1;
-
 #else
   char buf[512];
   sprintf(buf, "sudo ip link add %s type dummy", info->if_name);
@@ -223,7 +220,7 @@ static int create_if(struct if_info* info)
   {
     CU_FAIL("Creating interface failed");
   }
-  return 1;
+
 #endif
 }
 
@@ -280,11 +277,7 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces, .timeout = 60)
     sprintf(info_two.if_name, "eth12");
   #endif
 
-  int ret = create_if(&info_one);
-  if (ret == -2)
-  {
-      return;
-  }
+  create_if(&info_one);
   create_if(&info_two);
 
 
@@ -329,11 +322,7 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface, .timeout = 60)
   sprintf(info_one.if_name, "eth13");
   sprintf(info_two.if_name, "eth14");
 #endif
-  int ret = create_if(&info_one);
-  if (ret == -2)
-  {
-      return;
-  }
+  create_if(&info_one);
   create_if(&info_two);
 
   change_address(info_one.if_name, ip_before);
@@ -378,11 +367,7 @@ CU_Test(ddsrt_ip_change_notify, create_and_free, .timeout = 50)
 #ifdef __linux__
   sprintf(info_one.if_name, "eth16");
 #endif
-  int ret = create_if(&info_one);
-  if (ret == -2)
-  {
-      return;
-  }
+  create_if(&info_one);
   change_address(info_one.if_name, ip_before);
 
   icnd = ddsrt_ip_change_notify_new(NULL, info_one.if_name, NULL);
