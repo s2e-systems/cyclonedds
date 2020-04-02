@@ -39,15 +39,15 @@ struct if_info {
 };
 
 struct callback_data {
-    int result;
-    volatile sig_atomic_t termflag;
+  int result;
+  volatile sig_atomic_t termflag;
 };
 
 static void callback(void* vdata)
 {
-    struct callback_data* data = (struct callback_data*)vdata;
-    data->result = 1;
-    data->termflag = 1;
+  struct callback_data* data = (struct callback_data*)vdata;
+  data->result = 1;
+  data->termflag = 1;
 }
 
 
@@ -132,91 +132,70 @@ static int create_if(struct if_info* info)
   TCHAR hwIdList[LINE_LEN + 4];
   DWORD flags = INSTALLFLAG_READONLY | INSTALLFLAG_NONINTERACTIVE;
   BOOL reboot = FALSE;
-  LPTSTR windir = (LPTSTR) malloc(MAX_PATH*sizeof(TCHAR));
+  LPTSTR windir = (LPTSTR)malloc(MAX_PATH*sizeof(TCHAR));
+  HANDLE callbackChangeHandle;
+  DWORD IfIndex = 0;
+
   dwRet = GetEnvironmentVariable(TEXT("WINDIR"), windir, MAX_PATH);
   if(dwRet == 0) {
-      CU_FAIL("WINDIR environment variable not found")
+      CU_FAIL_FATAL("WINDIR environment variable not found")
   }
   PathCombine((char *)InfPath, windir, infFileName);
-
   // List of hardware ID's must be double zero-terminated
   ZeroMemory(hwIdList, sizeof(hwIdList));
   if (FAILED(StringCchCopy(hwIdList, LINE_LEN, hwid))) {
-    goto final;
+    CU_FAIL_FATAL("StringCchCopy failed");
   }
-
   // Get the ClassName from the InfFile
-  if (!SetupDiGetINFClass(InfPath, &ClassGUID, ClassName, sizeof(ClassName) / sizeof(ClassName[0]), 0))
-  {
-    printf("Error getting INF class");
-    goto final;
+  if (!SetupDiGetINFClass(InfPath, &ClassGUID, ClassName, sizeof(ClassName) / sizeof(ClassName[0]), 0)) {
+    CU_FAIL_FATAL("Error getting INF class");
   }
-
-  // Create the DeviceInfoList
   info->DeviceInfoSet = SetupDiCreateDeviceInfoList(&ClassGUID, 0);
-  if (info->DeviceInfoSet == INVALID_HANDLE_VALUE)
-  {
-    goto final;
+  if (info->DeviceInfoSet == INVALID_HANDLE_VALUE) {
+    CU_FAIL_FATAL("DeviceInfoSet is INVALID");
   }
-
-  //
-  // Now create the element.
-  // Use the Class GUID and Name from the INF file.
-  //
   info->DeviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
   if (!SetupDiCreateDeviceInfo(info->DeviceInfoSet,
-    ClassName,
-    &ClassGUID,
-    NULL,
-    0,
-    DICD_GENERATE_ID,
-    &info->DeviceInfoData))
-  {
+    ClassName, &ClassGUID, NULL /*DeviceDescription*/,
+    0 /*hwndParent*/, DICD_GENERATE_ID, &info->DeviceInfoData)) {
     DWORD error = GetLastError();
-    printf("SetupDiCreateDeviceInfo failed with error: %lu\n", error);
-    goto final;
+    SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
+    switch (error) {
+        case ERROR_ACCESS_DENIED: CU_FAIL_FATAL("SetupDiCreateDeviceInfo failed with ERROR_ACCESS_DENIED"); break;
+        default: CU_FAIL_FATAL("SetupDiCreateDeviceInfo failed");
+    }
   }
-
-  //
   // Add the HardwareID to the Device's HardwareID property.
-  //
   if (!SetupDiSetDeviceRegistryProperty(info->DeviceInfoSet,
     &info->DeviceInfoData,
     SPDRP_HARDWAREID,
     (LPBYTE)hwIdList,
-    ((DWORD)_tcslen(hwIdList) + 1 + 1) * sizeof(TCHAR)))
-  {
-    printf("Failed to add hwid\n");
-    goto final;
+    ((DWORD)_tcslen(hwIdList) + 1 + 1) * sizeof(TCHAR))) {
+    SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
+    CU_FAIL_FATAL("SetupDiSetDeviceRegistryProperty failed");
   }
 
-  //
-   // Transform the registry element into an actual devnode
-   // in the PnP HW tree.
-   //
+   // Transform the registry element into an actual devnode in the PnP HW tree.
   if (!SetupDiCallClassInstaller(DIF_REGISTERDEVICE,
     info->DeviceInfoSet,
     &info->DeviceInfoData))
   {
     DWORD error = GetLastError();
-    if (error == ERROR_IN_WOW64)
-    {
-        CU_PASS("SetupDiCreateDeviceInfo failed. Skipping test");
+    SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
+    switch (error) {
+        case ERROR_IN_WOW64:
+            CU_PASS("SetupDiCreateDeviceInfo failed. Skipping test");
+            return -2;
+        default: CU_FAIL_FATAL("SetupDiCallClassInstaller failed");
     }
-    //printf("Failed SetupDiCallClassInstaller with error: %lu\n", error);
-    if (info->DeviceInfoSet != INVALID_HANDLE_VALUE) {
-      SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
-    }
-    return -2;
   }
 
-  HANDLE callbackChangeHandle;
-  DWORD IfIndex = 0;
   NotifyIpInterfaceChange(AF_UNSPEC /*Family*/, interface_change_cb /*PIPINTERFACE_CHANGE_CALLBACK Callback*/,
     (void*)&IfIndex /*CallerContext*/, FALSE /*InitialNotification*/, &callbackChangeHandle /*NotificationHandle*/);
 
   if (!UpdateDriverForPlugAndPlayDevicesA(NULL, hwid, InfPath, flags, &reboot)) {
-    goto final;
+    SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
+    CU_FAIL_FATAL("UpdateDriverForPlugAndPlayDevices failed");
   }
 
   // Wait until the interface is ready
@@ -236,13 +215,6 @@ static int create_if(struct if_info* info)
 
   return 1;
 
-  final:
-
-  if (info->DeviceInfoSet != INVALID_HANDLE_VALUE) {
-    SetupDiDestroyDeviceInfoList(info->DeviceInfoSet);
-  }
-
-  return -1;
 #else
   char buf[512];
   sprintf(buf, "sudo ip link add %s type dummy", info->if_name);
@@ -266,10 +238,7 @@ static void delete_if(struct if_info* info)
   rmdParams.HwProfile = 0;
   if (!SetupDiSetClassInstallParams(info->DeviceInfoSet, &info->DeviceInfoData, &rmdParams.ClassInstallHeader, sizeof(rmdParams)) ||
     !SetupDiCallClassInstaller(DIF_REMOVE, info->DeviceInfoSet, &info->DeviceInfoData)) {
-    //
-    // failed to invoke DIF_REMOVE
-    //
-    printf("Error removing");
+    CU_FAIL_FATAL("Error removing interface");
   }
 
   memset(info, 0, sizeof(*info));
@@ -286,30 +255,30 @@ static void delete_if(struct if_info* info)
 
 CU_Init(ddsrt_ip_change_notify)
 {
-	ddsrt_init();
-	return 0;
+  ddsrt_init();
+  return 0;
 }
 
 CU_Clean(ddsrt_ip_change_notify)
 {
-	ddsrt_fini();
-	return 0;
+  ddsrt_fini();
+  return 0;
 }
 
 CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces, .timeout = 60)
 {
-	const int expected = 1;
+  const int expected = 1;
 
-	const char* ip_if_two = "10.13.0.1";
-	const char* ip_before = "10.12.0.1";
-	const char* ip_after = "10.12.0.2";
-    struct if_info info_one = { 0 };
-    struct if_info info_two = { 0 };
+  const char* ip_if_two = "10.13.0.1";
+  const char* ip_before = "10.12.0.1";
+  const char* ip_after = "10.12.0.2";
+  struct if_info info_one = { 0 };
+  struct if_info info_two = { 0 };
 
-#ifdef __linux__
+  #ifdef __linux__
     sprintf(info_one.if_name, "eth11");
     sprintf(info_two.if_name, "eth12");
-#endif
+  #endif
 
   int ret = create_if(&info_one);
   if (ret == -2)
@@ -325,18 +294,17 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces, .timeout = 60)
 
 
   struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data);
-    // Wait before changing the address so that the monitoring thread can get started
-	dds_sleepfor(1000000000);
+  // Wait before changing the address so that the monitoring thread can get started
+  dds_sleepfor(1000000000);
   change_address(info_one.if_name, ip_after);
-    while (!data.termflag)
-	{
-		dds_sleepfor(10);
-	}
+  while (!data.termflag)
+  {
+    dds_sleepfor(10);
+  }
 
+  CU_ASSERT_EQUAL(expected, data.result);
 
-    CU_ASSERT_EQUAL(expected, data.result);
-
-	ddsrt_ip_change_notify_free(icnd);
+  ddsrt_ip_change_notify_free(icnd);
   delete_if(&info_one);
   delete_if(&info_two);
 }
