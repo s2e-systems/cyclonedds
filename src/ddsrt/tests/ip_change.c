@@ -77,7 +77,7 @@ static void add_address(struct if_info* info, const char* ip)
 
 #else
   char buf[512];
-  sprintf(buf, "sudo ip address add %s/24 dev %s", ip, if_name);
+  sprintf(buf, "sudo ip address add %s/24 dev %s", ip, info->if_name);
   int ret = system(buf);
   if (ret != 0)
   {
@@ -92,14 +92,7 @@ static void remove_address(const struct if_info* info)
 #ifdef _WIN32
   DeleteIPAddress(info->NTEContext);
 #else
-  char buf[512];
-  sprintf(buf, "sudo ip address delete %s dev %s", ip, if_name);
-  int ret = system(buf);
-  if (ret != 0)
-  {
-    CU_FAIL_FATAL("Changing IP address of interface failed");
-  }
-
+  DDSRT_UNUSED_ARG(info);
 #endif
 }
 
@@ -111,7 +104,7 @@ static void change_address(struct if_info* info, const char* ip)
   add_address(info, ip);
 #else
   char buf[512];
-  sprintf(buf, "sudo ifconfig %s %s", if_name, ip);
+  sprintf(buf, "sudo ifconfig %s %s", info->if_name, ip);
   int ret = system(buf);
   if (ret != 0)
   {
@@ -228,7 +221,7 @@ static void create_if(struct if_info* info)
   int ret = system(buf);
   if (ret != 0)
   {
-    CU_FAIL("Creating interface failed");
+    CU_FAIL_FATAL("Creating interface failed");
   }
 
 #endif
@@ -247,15 +240,15 @@ static void delete_if(struct if_info* info)
     !SetupDiCallClassInstaller(DIF_REMOVE, info->DeviceInfoSet, &info->DeviceInfoData)) {
     CU_FAIL_FATAL("Error removing interface");
   }
-
   memset(info, 0, sizeof(*info));
+
 #else
   char buf[512];
   sprintf(buf, "sudo ip link delete %s", info->if_name);
   int ret = system(buf);
   if (ret != 0)
   {
-    CU_FAIL("Deleting interface failed");
+    CU_FAIL_FATAL("Deleting interface failed");
   }
 #endif
 }
@@ -294,14 +287,13 @@ CU_Test(ddsrt_ip_change_notify, ipv4_multiple_interfaces, .timeout = 60)
   add_address(&info_two, ip_if_two);
   struct callback_data data = {.result = 0, .termflag = 0};
 
-
-  struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data);
+  struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(info_one.if_name, &callback, &data);
   // Wait before changing the address so that the monitoring thread can get started
-  dds_sleepfor(1000000000);
+  dds_sleepfor(DDS_MSECS(10));
   change_address(&info_one, ip_after);
   while (!data.termflag)
   {
-    dds_sleepfor(10);
+    dds_sleepfor(DDS_USECS(10));
   }
 
   CU_ASSERT_EQUAL(expected, data.result);
@@ -337,11 +329,10 @@ CU_Test(ddsrt_ip_change_notify, ipv4_correct_interface, .timeout = 60)
   add_address(&info_one, ip_before);
   add_address(&info_two, ip_if_two);
 
-  struct ddsrt_ip_change_notify_data* icnd_one = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data_one);
-  struct ddsrt_ip_change_notify_data* icnd_two = ddsrt_ip_change_notify_new(&callback, info_two.if_name, &data_two);
-
+  struct ddsrt_ip_change_notify_data* icnd_one = ddsrt_ip_change_notify_new(info_one.if_name, &callback, &data_one);
+  struct ddsrt_ip_change_notify_data* icnd_two = ddsrt_ip_change_notify_new(info_two.if_name, &callback, &data_two);
   // Wait before changing the address so that the monitoring thread can get started
-  dds_sleepfor(DDS_SECS(1));
+  dds_sleepfor(DDS_MSECS(10));
   change_address(&info_one, ip_after);
 
   while (!data_one.termflag)
@@ -378,12 +369,12 @@ CU_Test(ddsrt_ip_change_notify, create_and_free, .timeout = 50)
   create_if(&info_one);
   add_address(&info_one, ip_before);
 
-  icnd = ddsrt_ip_change_notify_new(NULL, info_one.if_name, NULL);
+  icnd = ddsrt_ip_change_notify_new(info_one.if_name, NULL, NULL);
   ddsrt_ip_change_notify_free(icnd);
 
-  icnd = ddsrt_ip_change_notify_new(&callback, info_one.if_name, &data);
+  icnd = ddsrt_ip_change_notify_new(info_one.if_name, &callback, &data);
   // Wait before changing the address so that the monitoring thread can get started
-  dds_sleepfor(DDS_MSECS(1000));
+  dds_sleepfor(DDS_MSECS(10));
   change_address(&info_one, ip_after);
   while (!data.termflag)
   {

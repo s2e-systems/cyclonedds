@@ -71,7 +71,7 @@ static uint32_t ip_change_notify_thread(void* vicnd)
 }
 
 
-struct ddsrt_ip_change_notify_data *ddsrt_ip_change_notify_new(dds_ip_change_notify_callback cb, const char* if_name, void *data)
+struct ddsrt_ip_change_notify_data *ddsrt_ip_change_notify_new(const char* if_name, dds_ip_change_notify_callback cb, void *data)
 {
   struct ddsrt_ip_change_notify_data *icnd = (struct ddsrt_ip_change_notify_data *)ddsrt_malloc(sizeof(*icnd));
   ddsrt_threadattr_t attr;
