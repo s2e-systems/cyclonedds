@@ -46,7 +46,7 @@ static uint32_t ip_change_notify_thread(void* vicnd)
     if (len > 0)
     {
       while ((NLMSG_OK(nlh, len)) && (nlh->nlmsg_type != NLMSG_DONE)) {
-        if (nlh->nlmsg_type == RTM_NEWADDR) {
+        if (nlh->nlmsg_type == RTM_NEWADDR || nlh->nlmsg_type == RTM_DELADDR) {
           struct ifaddrmsg *ifa = (struct ifaddrmsg *) NLMSG_DATA(nlh);
           struct rtattr *rth = IFA_RTA(ifa);
           long unsigned int rtl = IFA_PAYLOAD(nlh);

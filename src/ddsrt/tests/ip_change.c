@@ -87,12 +87,19 @@ static void add_address(struct if_info* info, const char* ip)
 #endif
 }
 
-static void remove_address(const struct if_info* info)
+static void remove_address(const struct if_info* info, const char* ip)
 {
 #ifdef _WIN32
   DeleteIPAddress(info->NTEContext);
+  DDSRT_UNUSED_ARG(ip);
 #else
-  DDSRT_UNUSED_ARG(info);
+  char buf[512];
+  sprintf(buf, "sudo ip address delete %s/24 dev %s", ip, info->if_name);
+  int ret = system(buf);
+  if (ret != 0)
+  {
+    CU_FAIL_FATAL("Removing IP address of interface failed");
+  }
 #endif
 }
 
@@ -100,7 +107,7 @@ static void remove_address(const struct if_info* info)
 static void change_address(struct if_info* info, const char* ip)
 {
 #ifdef _WIN32
-  remove_address(info);
+  remove_address(info, ip);
   add_address(info, ip);
 #else
   char buf[512];
@@ -380,6 +387,44 @@ CU_Test(ddsrt_ip_change_notify, create_and_free, .timeout = 50)
   {
     dds_sleepfor(DDS_USECS(10));
   }
+  CU_ASSERT_EQUAL(expected, data.result);
+
+  ddsrt_ip_change_notify_free(icnd);
+  delete_if(&info_one);
+}
+
+CU_Test(ddsrt_ip_change_notify, ipv4_add_and_remove_address, .timeout = 60)
+{
+  const int expected = 1;
+  const char* ip = "25.12.0.1";
+  struct if_info info_one = { 0 };
+
+  #ifdef __linux__
+    sprintf(info_one.if_name, "eth17");
+  #endif
+
+  create_if(&info_one);
+  struct callback_data data = {.result = 0, .termflag = 0};
+
+  struct ddsrt_ip_change_notify_data* icnd = ddsrt_ip_change_notify_new(info_one.if_name, &callback, &data);
+  // Wait before changing the address so that the monitoring thread can get started
+  dds_sleepfor(DDS_MSECS(10));
+  add_address(&info_one, ip);
+  while (!data.termflag)
+  {
+    dds_sleepfor(DDS_USECS(10));
+  }
+
+  CU_ASSERT_EQUAL(expected, data.result);
+
+  data.result = 0;
+  data.termflag = 0;
+  remove_address(&info_one, ip);
+  while (!data.termflag)
+  {
+    dds_sleepfor(DDS_USECS(10));
+  }
+
   CU_ASSERT_EQUAL(expected, data.result);
 
   ddsrt_ip_change_notify_free(icnd);
