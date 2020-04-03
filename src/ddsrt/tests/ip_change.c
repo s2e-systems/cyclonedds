@@ -90,7 +90,9 @@ static void add_address(struct if_info* info, const char* ip)
 static void remove_address(const struct if_info* info, const char* ip)
 {
 #ifdef _WIN32
-  DeleteIPAddress(info->NTEContext);
+  if (DeleteIPAddress(info->NTEContext) != NO_ERROR) {
+    CU_FAIL_FATAL("Removing IP address of interface failed");
+  }
   DDSRT_UNUSED_ARG(ip);
 #else
   char buf[512];
@@ -103,7 +105,11 @@ static void remove_address(const struct if_info* info, const char* ip)
 #endif
 }
 
-
+/*
+ * Changes the IP address of an specified network interface.
+ * Note that in Windows no function that changes the address
+ * directly is available
+ */
 static void change_address(struct if_info* info, const char* ip)
 {
 #ifdef _WIN32
@@ -131,6 +137,13 @@ void NETIOAPI_API_ interface_change_cb(_In_ PVOID CallerContext, _In_ PMIB_IPINT
 }
 #endif
 
+/*
+ * In Linux the name of the interface that is
+ * created is taken from the info paramter.
+ * In Windows it is not possible to name the network
+ * interface, hence the name is provided as an output
+ * in the info paramter
+ */
 static void create_if(struct if_info* info)
 {
 #ifdef _WIN32

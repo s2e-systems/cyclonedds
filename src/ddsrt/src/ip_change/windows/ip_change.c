@@ -72,8 +72,8 @@ static uint32_t ip_change_notify_thread(void* context)
                     for (ifa_previous = icn->ifa_root_previous; ifa_previous; ifa_previous = ifa_previous->next)
                     {
                         if (ddsrt_strcasecmp(ifa->name, ifa_previous->name) == 0 &&
-                            memcmp(ifa->addr, ifa_previous->addr, sizeof(ifa->addr)) == 0 &&
-                            memcmp(ifa->netmask, ifa_previous->netmask, sizeof(ifa->netmask)) == 0)
+                            memcmp(ifa->addr, ifa_previous->addr, sizeof(struct sockaddr)) == 0 &&
+                            memcmp(ifa->netmask, ifa_previous->netmask, sizeof(struct sockaddr)) == 0)
                         {
                             found = true;
                             break;
