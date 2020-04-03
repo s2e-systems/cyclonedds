@@ -30,7 +30,6 @@
 #include "dds/ddsi/q_unused.h"
 #include "dds/ddsi/q_misc.h"
 #include "dds/ddsi/q_addrset.h"
-#include "dds/ddsi/q_nwif.h"
 
 #include "dds/ddsrt/xmlparser.h"
 
@@ -578,8 +577,6 @@ static const struct cfgelem internal_cfgelems[] = {
     BLURB("<p>This element controls whether retransmits are prioritized over new data, speeding up recovery.</p>") },
   { LEAF("UseMulticastIfMreqn"), 1, "0", ABSOFF(use_multicast_if_mreqn), 0, uf_int, 0, pf_int,
     BLURB("<p>Do not use.</p>") },
-  { LEAF("BindUnicastToInterfaceAddr"), 1, "true", ABSOFF(bind_unicast_to_interface_addr), 0, uf_boolean, 0, pf_boolean,
-    BLURB("<p>Bind unicast sockets to the address of the preferred interface; if false, bind to 0.0.0.0 (IPv4) or its equivalent</p>") },
   { LEAF("SendAsync"), 1, "false", ABSOFF(xpack_send_async), 0, uf_boolean, 0, pf_boolean,
     BLURB("<p>This element controls whether the actual sending of packets occurs on the same thread that prepares them, or is done asynchronously by another thread.</p>") },
   { LEAF_W_ATTRS("RediscoveryBlacklistDuration", rediscovery_blacklist_duration_attrs), 1, "10s", ABSOFF(prune_deleted_ppant.delay), 0, uf_duration_inf, 0, pf_duration,
@@ -862,12 +859,12 @@ static const struct cfgelem root_cfgelem = {
 
 static const struct unit unittab_duration[] = {
   { "ns", 1 },
-  { "us", 1000 },
-  { "ms", T_MILLISECOND },
-  { "s", T_SECOND },
-  { "min", 60 * T_SECOND },
-  { "hr", 3600 * T_SECOND },
-  { "day", 24 * 3600 * T_SECOND },
+  { "us", DDS_USECS (1) },
+  { "ms", DDS_MSECS (1) },
+  { "s", DDS_SECS (1) },
+  { "min", DDS_SECS (60) },
+  { "hr", DDS_SECS (3600) },
+  { "day", DDS_SECS (24 * 3600) },
   { NULL, 0 }
 };
 
@@ -1912,37 +1909,37 @@ static enum update_result uf_duration_inf (struct cfgst *cfgst, void *parent, st
 {
   if (ddsrt_strcasecmp (value, "inf") == 0) {
     int64_t * const elem = cfg_address (cfgst, parent, cfgelem);
-    *elem = T_NEVER;
+    *elem = DDS_INFINITY;
     return URES_SUCCESS;
   } else {
-    return uf_duration_gen (cfgst, parent, cfgelem, value, 0, 0, T_NEVER - 1);
+    return uf_duration_gen (cfgst, parent, cfgelem, value, 0, 0, DDS_INFINITY - 1);
   }
 }
 
 static enum update_result uf_duration_ms_1hr (struct cfgst *cfgst, void *parent, struct cfgelem const * const cfgelem, UNUSED_ARG (int first), const char *value)
 {
-  return uf_duration_gen (cfgst, parent, cfgelem, value, T_MILLISECOND, 0, 3600 * T_SECOND);
+  return uf_duration_gen (cfgst, parent, cfgelem, value, DDS_MSECS (1), 0, DDS_SECS (3600));
 }
 
 static enum update_result uf_duration_ms_1s (struct cfgst *cfgst, void *parent, struct cfgelem const * const cfgelem, UNUSED_ARG (int first), const char *value)
 {
-  return uf_duration_gen (cfgst, parent, cfgelem, value, T_MILLISECOND, 0, T_SECOND);
+  return uf_duration_gen (cfgst, parent, cfgelem, value, DDS_MSECS (1), 0, DDS_SECS (1));
 }
 
 static enum update_result uf_duration_us_1s (struct cfgst *cfgst, void *parent, struct cfgelem const * const cfgelem, UNUSED_ARG (int first), const char *value)
 {
-  return uf_duration_gen (cfgst, parent, cfgelem, value, 1000, 0, T_SECOND);
+  return uf_duration_gen (cfgst, parent, cfgelem, value, DDS_USECS (1), 0, DDS_SECS (1));
 }
 
 static enum update_result uf_duration_100ms_1hr (struct cfgst *cfgst, void *parent, struct cfgelem const * const cfgelem, UNUSED_ARG (int first), const char *value)
 {
-  return uf_duration_gen (cfgst, parent, cfgelem, value, 0, 100 * T_MILLISECOND, 3600 * T_SECOND);
+  return uf_duration_gen (cfgst, parent, cfgelem, value, 0, DDS_MSECS (100), DDS_SECS (3600));
 }
 
 static void pf_duration (struct cfgst *cfgst, void *parent, struct cfgelem const * const cfgelem, uint32_t sources)
 {
   int64_t const * const elem = cfg_address (cfgst, parent, cfgelem);
-  if (*elem == T_NEVER)
+  if (*elem == DDS_INFINITY)
     cfg_logelem (cfgst, sources, "inf");
   else
     pf_int64_unit (cfgst, *elem, sources, unittab_duration, "s");
@@ -2580,7 +2577,7 @@ static int set_default_channel (struct config *cfg)
     c->next = NULL;
     c->name = ddsrt_strdup ("user");
     c->priority = 0;
-    c->resolution = 1 * T_MILLISECOND;
+    c->resolution = DDS_MSECS (1);
 #ifdef DDSI_INCLUDE_BANDWIDTH_LIMITING
     c->data_bandwidth_limit = 0;
     c->auxiliary_bandwidth_limit = 0;

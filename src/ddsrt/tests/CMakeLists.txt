@@ -46,7 +46,7 @@ target_link_libraries(
   cunit_ddsrt_ipchange PRIVATE ddsrt)
 if(WIN32)
   target_link_libraries(
-      cunit_ddsrt_ipchange PRIVATE newdev Shlwapi)
+      cunit_ddsrt_ipchange PRIVATE newdev Shlwapi Setupapi)
 endif()
 
 target_include_directories(
